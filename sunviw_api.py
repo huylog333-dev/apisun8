@@ -5535,8 +5535,9 @@ _PANEL_ONLY = {"/api/ips", "/api/history/clear", "/api/history/regrade", "/api/h
 def _gate_key():
     """Cổng cho endpoint dữ liệu.
     1) Admin chính (X-Admin-Token) hoặc thiết bị panel ĐÃ DUYỆT (HWID + token server cấp) -> panel=True (được ?detail=1, mọi trường).
-    2) _PANEL_ONLY (ips / history clear·regrade·wipe): ngoài (1) -> 403, key khách không được đụng.
-    3) Còn lại cần key người dùng hợp lệ + HWID (KEY_GATE_API) và bị giới hạn tốc độ theo IP / key / số lần sai key."""
+    2) ?detail (bất kỳ giá trị nào) trên endpoint dự đoán: ngoài (1) -> 404 NGAY (không kiểm key, không gắn thiết bị) — chỉ thiết bị được admin duyệt vào panel HTML / admin chính mới có quyền.
+    3) _PANEL_ONLY (ips / history clear·regrade·wipe): ngoài (1) -> 403, key khách không được đụng.
+    4) Còn lại cần key người dùng hợp lệ + HWID (KEY_GATE_API) và bị giới hạn tốc độ theo IP / key / số lần sai key."""
     p = request.path
     if request.method == "OPTIONS" or p not in _GATED_EXACT:
         return None
@@ -5556,6 +5557,8 @@ def _gate_key():
         flask_g.key_game = "all"                        # vào cả SUN + HIT + LC, không cần key
         flask_g.panel = True
         return None
+    if "detail" in request.args and p in OFFSRV_PATHS:   # ?detail chỉ dành cho panel đã duyệt / admin chính -> người khác (kể cả có key hợp lệ) nhận 404 như trang không tồn tại
+        abort(404)
     if p in _PANEL_ONLY:
         return _json({"ok": False, "loi": "forbidden"}, 403)
     if not KEY_GATE_API:
@@ -6375,19 +6378,17 @@ def api_predict():
     return _json(_predict_out(res, err, upd, "sun", "sun", SUN))
 
 
-_TOOL_OUT_KEYS = ("ok", "phien", "du_doan", "do_tin_cay", "phien_truoc", "xuc_xac", "tong", "ket_qua_truoc", "tool_dung_sai_10_van", "stale", "cap_nhat", "game", "ban", "ten_ban")
-if _env_bool("SUNVIW_TOOL_SHOW_WRN", False):         # mặc định ẨN so_van_wr (= cỡ cửa sổ WR, tham số thuật toán). Tool cũ cần trường này -> đặt =1
-    _TOOL_OUT_KEYS = _TOOL_OUT_KEYS + ("so_van_wr",)
-_TOOL_HIST_KEYS = ("phien", "du_doan", "ket_qua", "tong", "dung")
+# TOOL KHÁCH (key người dùng) CHỈ NHẬN ĐÚNG 3 TRƯỜNG: phien (phiên được dự đoán) · du_doan · do_tin_cay.
+# Không còn: ok, phien_truoc, xuc_xac, tong, ket_qua_truoc, tool_dung_sai_10_van, stale, cap_nhat, game, ban, ten_ban, so_van_wr, lich_su...
+# (panel đã duyệt / admin chính vẫn nhận đủ trường như cũ — xem _predict_out)
+_TOOL_OUT_KEYS = ("phien", "du_doan", "do_tin_cay")
 
 
 def _tool_view(out):
-    """Danh sách trắng cho tool khách (key người dùng): chỉ phần đã công bố trong tài liệu API; mọi thứ nội bộ bị loại."""
+    """Danh sách trắng cho tool khách (key người dùng): CHỈ phien + du_doan + do_tin_cay. Mọi thứ khác bị loại (kể cả ?hist=, ?detail=)."""
     o = {k: out[k] for k in _TOOL_OUT_KEYS if k in out}
     if isinstance(o.get("do_tin_cay"), (int, float)):
         o["do_tin_cay"] = int(round(o["do_tin_cay"] / 5.0) * 5)      # làm tròn 5% -> không dùng để dò ngược WR từng logic
-    if "lich_su" in out:
-        o["lich_su"] = [{k: r.get(k) for k in _TOOL_HIST_KEYS} for r in out["lich_su"]]
     return o
 
 
