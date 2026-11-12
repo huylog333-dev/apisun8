@@ -24,7 +24,7 @@ Endpoint:
     ...?hist=N                   -> (mọi game) thêm lich_su: N ván đúng/sai gần nhất, mới -> cũ
     GET /api/predictlcmd5        -> [LC MD5] JSON dự đoán (game="lc79", ban="lcmd5"; tên cũ Tele68 MD5 — /api/predicttele68txmd5 vẫn chạy như alias); nguồn trả CẢ DANH SÁCH ~105 phiên, tool chỉ lưu thêm phiên chưa có, dự đoán phiên mới nhất + 1 và giữ tới khi API trả kết quả phiên đó (xem khối "CONFIG LC")
     GET /api/predictlchu         -> [LC HŨ] JSON dự đoán (game="lc79", ban="lchu"); nguồn https://wtx.tele68.com/v1/tx/sessions (cùng định dạng list với LC MD5), config + data RIÊNG (khối "CONFIG LC"). Key game LC79 dùng được cả 2 bàn LC
-    GET /tool/autocuoc           -> [AUTO CƯỢC LC79 · 1 TÀI KHOẢN = 1 TAB, 2 BÀN MD5 + HŨ: luật cược riêng từng bàn, mục tiêu lãi + tự rút DÙNG CHUNG] trang web điều khiển auto cược + auto rút (thay bot Telegram): đăng nhập LC79, bật/tắt từng luật (x2 thắng/thua, giảm cược, pause, mục tiêu lãi, tự rút Momo/Ngân hàng), biểu đồ lãi/lỗ. GIAO DIỆN BỊ ẨN: chỉ có ô nhập KEY AUTO CƯỢC LC (game "autolc", tiền tố AUTOLC-, tạo ở /api/admin); nhập đúng key mới nhận được giao diện, và MỖI request /tool/autocuoc/api/* (kể cả nhận dự đoán) đều phải kèm X-User-Key + X-HWID. Mỗi key chỉ thấy tài khoản LC79 của mình; key hết hạn -> phiên auto cược tự dừng. Chạy gunicorn --workers 1 (xem khối "AUTO CƯỢC LC79")
+    GET /tool/autocuoc           -> (chuyển hướng 302 sang https://autocuoclc79.netlify.app/ — đổi bằng AUTOBET_UI_URL) [AUTO CƯỢC LC79 · 1 TÀI KHOẢN = 1 TAB, 2 BÀN MD5 + HŨ: luật cược riêng từng bàn, mục tiêu lãi + tự rút DÙNG CHUNG] trang web điều khiển auto cược + auto rút (thay bot Telegram): đăng nhập LC79, bật/tắt từng luật (x2 thắng/thua, giảm cược, pause, mục tiêu lãi, tự rút Momo/Ngân hàng), biểu đồ lãi/lỗ. GIAO DIỆN BỊ ẨN: chỉ có ô nhập KEY AUTO CƯỢC LC (game "autolc", tiền tố AUTOLC-, tạo ở /api/admin); nhập đúng key mới nhận được giao diện, và MỖI request /tool/autocuoc/api/* (kể cả nhận dự đoán) đều phải kèm X-User-Key + X-HWID. Mỗi key chỉ thấy tài khoản LC79 của mình; key hết hạn -> phiên auto cược tự dừng. Chạy gunicorn --workers 1 (xem khối "AUTO CƯỢC LC79")
     GET /api/html                -> panel HTML theo dõi Sun + Hit, đổi qua lại, chọn số ván lịch sử. CHỈ MỞ KHI ADMIN CHÍNH DUYỆT THIẾT BỊ (HWID): máy lạ thấy bảng "Đang chờ admin duyệt", được duyệt thì tự mở, KHÔNG cần key, vào cả Sun + Hit
     GET /api/panel/status        -> panel hỏi trạng thái duyệt của thiết bị này (gửi yêu cầu lần đầu): {"status": "approved" | "pending" | "denied" | "limit"} (xem khối "DUYỆT THIẾT BỊ VÀO PANEL")
     GET /api/admin/panel (+ POST /approve · /deny · /remove · /ban · /unban) -> admin CHÍNH xem + duyệt / từ chối / gỡ quyền / BAN (danh sách đen: chặn cả IP + thiết bị khỏi /api/html, trả 404) thiết bị vào panel (mục "Duyệt thiết bị vào panel HTML" ở trang /api/admin)
@@ -4362,7 +4362,7 @@ def ip_health():
 
 
 # ─── FLASK ────────────────────────────────────────────────────────────────
-from flask import Flask, Response, abort, request  # noqa: E402
+from flask import Flask, Response, abort, redirect, request  # noqa: E402
 from flask import g as flask_g  # noqa: E402  (đặt tên khác vì nhiều hàm dùng biến cục bộ `g`)
 
 os.umask(0o077)                                    # file dữ liệu (key / thiết bị / phiên) chỉ chủ tiến trình đọc được
@@ -4456,6 +4456,35 @@ _CORS_EXACT = {"/", "/health", "/api/key/check", "/api/predictsun", "/api/predic
                "/api/predictlcmd5", "/api/predictlchu", "/api/predicttele68txmd5", "/api/notice"}
 _NOFRAME_PREFIX = ("/api/admin", "/tool/autocuoc", "/api/autocuoc", "/autocuoc")
 
+# ── AUTO CƯỢC: GIAO DIỆN TÁCH RA FILE HTML RIÊNG (autocuoc.html), server chỉ còn là API ──────────────────────────
+#   AUTOBET_SERVE_UI=0 (mặc định)  server KHÔNG còn trả giao diện: /tool/autocuoc, /tool/autocuoc/ui (+ alias) -> 404. =1 để bật lại giao diện cũ.
+#   AUTOBET_ALLOWED_ORIGINS        danh sách origin của PANEL chứa file autocuoc.html, cách nhau dấu phẩy, vd: https://panel.example.com
+#                                  (file mở thẳng từ ổ đĩa có Origin "null" -> phải ghi rõ "null"; "*" = mọi origin, KHÔNG khuyên dùng).
+#                                  Chỉ origin trong danh sách mới được gọi chéo /tool/autocuoc/api/* từ trình duyệt; origin khác bị chặn như cũ.
+#   Mọi request vẫn BẮT BUỘC X-User-Key (key autolc) + X-HWID: CORS chỉ quyết định trình duyệt có cho trang khác đọc phản hồi hay không,
+#   KHÔNG thay cho xác thực. Xác thực và gắn thiết bị vẫn nằm hoàn toàn ở server (_ab_gate).
+#   AUTOBET_UI_URL                 LINK GIAO DIỆN AUTO CƯỢC (mặc định https://autocuoclc79.netlify.app/). Khi AUTOBET_SERVE_UI=0, mở /tool/autocuoc
+#                                  (và /api/autocuoc, /autocuoc) sẽ tự chuyển hướng sang link này. Origin của link này luôn được tự thêm vào
+#                                  AUTOBET_ALLOWED_ORIGINS để trang đó gọi được API. Đặt AUTOBET_UI_URL="" để tắt chuyển hướng (quay lại trả 404).
+AB_SERVE_UI = _env_bool("AUTOBET_SERVE_UI", False)
+AB_API_PREFIX = "/tool/autocuoc/api/"
+AB_UI_URL = os.environ.get("AUTOBET_UI_URL", "https://autocuoclc79.netlify.app/").strip()
+if AB_UI_URL and not AB_UI_URL.lower().startswith(("http://", "https://")):
+    AB_UI_URL = ""                                       # chỉ nhận link http(s) — tránh chuyển hướng tới scheme lạ (javascript:, data:...)
+AB_ALLOWED_ORIGINS = {o.strip().rstrip("/").lower() for o in os.environ.get("AUTOBET_ALLOWED_ORIGINS", "").split(",") if o.strip()}
+if AB_UI_URL:                                            # origin của trang giao diện luôn được phép gọi chéo API (vẫn bắt buộc key + HWID)
+    _ab_ui_p = urllib.parse.urlsplit(AB_UI_URL)
+    if _ab_ui_p.scheme and _ab_ui_p.netloc:
+        AB_ALLOWED_ORIGINS.add(f"{_ab_ui_p.scheme}://{_ab_ui_p.netloc}".lower())
+
+
+def _ab_origin_ok():
+    """Request tới /tool/autocuoc/api/* có Origin nằm trong AUTOBET_ALLOWED_ORIGINS không (chỉ để cho phép gọi chéo từ file HTML auto cược)."""
+    if not AB_ALLOWED_ORIGINS or not request.path.startswith(AB_API_PREFIX):
+        return False
+    o = request.headers.get("Origin", "").strip().rstrip("/").lower()
+    return bool(o) and ("*" in AB_ALLOWED_ORIGINS or o in AB_ALLOWED_ORIGINS)
+
 
 def _is_https():
     return request.is_secure or request.headers.get("X-Forwarded-Proto", "").split(",")[-1].strip().lower() == "https"
@@ -4469,6 +4498,12 @@ def _cors(resp):
         resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
         resp.headers["Access-Control-Allow-Headers"] = request.headers.get("Access-Control-Request-Headers") or "Content-Type, X-User-Key, X-HWID, X-HWID-ALT, X-HWID-FRESH, X-Device-Token"
         resp.headers["Access-Control-Max-Age"] = "600"
+    elif _ab_origin_ok():                               # API auto cược: CHỈ origin của panel (AUTOBET_ALLOWED_ORIGINS) mới được trình duyệt cho đọc phản hồi
+        resp.headers["Access-Control-Allow-Origin"] = "*" if "*" in AB_ALLOWED_ORIGINS else request.headers.get("Origin", "")
+        resp.headers["Vary"] = "Origin"
+        resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        resp.headers["Access-Control-Allow-Headers"] = "Content-Type, X-User-Key, X-HWID, X-HWID-ALT, X-HWID-FRESH"
+        resp.headers["Access-Control-Max-Age"] = "600"
     resp.headers["Cache-Control"] = "no-store"
     resp.headers["X-Content-Type-Options"] = "nosniff"
     resp.headers["Referrer-Policy"] = "no-referrer"
@@ -4477,7 +4512,7 @@ def _cors(resp):
     if "Content-Security-Policy" not in resp.headers:
         resp.headers["Content-Security-Policy"] = "frame-ancestors 'none'; base-uri 'none'; object-src 'none'; form-action 'self'"
     resp.headers["Cross-Origin-Opener-Policy"] = "same-origin"
-    resp.headers["Cross-Origin-Resource-Policy"] = "same-origin" if p not in _CORS_EXACT else "cross-origin"
+    resp.headers["Cross-Origin-Resource-Policy"] = "same-origin" if (p not in _CORS_EXACT and not _ab_origin_ok()) else "cross-origin"
     resp.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=()"
     if _is_https():
         resp.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
@@ -4565,6 +4600,8 @@ def _probe_guard():
 @app.before_request
 def _csrf_origin():
     """POST / PUT / DELETE có Origin khác host (trang web lạ gọi chéo) -> 403, trừ các endpoint công khai dùng key (có CORS)."""
+    if _ab_origin_ok():                                 # panel auto cược đã khai báo (AUTOBET_ALLOWED_ORIGINS) -> bỏ qua kiểm origin; xác thực vẫn bằng key + HWID trong _ab_gate
+        return None
     if request.method in ("POST", "PUT", "PATCH", "DELETE") and request.path not in _CORS_EXACT:
         o = request.headers.get("Origin", "")
         if o and o != "null":
@@ -4648,7 +4685,9 @@ KEY_DAYS = (1, 3, 7, 30, 60, 90)                     # hạn key cho phép khi T
 #    Gói không có trong bảng (60 / 90 ngày, hoặc key cũ 2 / 14 / 180 / 365 ngày) = chưa có giá -> không tính vào doanh thu (chỉ đếm riêng ở "chưa có giá"). Muốn tính thêm gói nào thì thêm vào đây.
 #    Giá được CHỐT vào sổ doanh thu ngay lúc kích hoạt -> sau này đổi bảng giá không làm đổi doanh thu cũ. Doanh thu chỉ ADMIN CHÍNH xem được (GET /api/admin/revenue + khối "Doanh thu" ở /api/admin).
 KEY_PRICE = {1: 10000, 3: 25000, 7: 75000, 30: 250000}
-REV_KEEP_SEC = 400 * 86400                            # sổ doanh thu giữ tối đa bấy lâu (đủ cho cửa sổ 1 ngày / 1 tuần / 1 tháng)
+REV_KEEP_SEC = 400 * 86400                            # sổ doanh thu giữ tối đa bấy lâu (đủ cho doanh thu hôm nay / tuần này / 30 ngày)
+VN_UTC_OFFSET = 7 * 3600                              # giờ Việt Nam (UTC+7): mốc 00:00 để RESET doanh thu NGÀY / TUẦN (Railway chạy giờ UTC nên KHÔNG dùng giờ máy chủ)
+AB_KEY_BIND_DEVICE = _env_bool("SUNVIW_AB_BIND_DEVICE", True)   # True (mặc định) = key AUTO CƯỢC LC cũng GẮN THIẾT BỊ như key khác -> trang admin hiện đúng số máy (1/1…) + chặn máy vượt max_dev · False = như cũ (không gắn, không giới hạn, admin luôn 0/N)
 KEY_MAX_TOTAL = 5000                                  # trần số key lưu trong file
 ADMIN_SESSION_SEC = 12 * 3600                         # phiên đăng nhập admin sống bao lâu
 LOGIN_MAX_FAIL = 8                                    # sai quá N lần trong LOGIN_LOCK_SEC -> khóa IP đó LOGIN_LOCK_SEC giây
@@ -5174,9 +5213,26 @@ def _rev_record(d, k, rec, now):
         del rv[kk]
 
 
+def _vn_day_start(now):
+    """Mốc 00:00 (giờ VN) của NGÀY chứa `now` (epoch giây). Tính bằng số học nên không phụ thuộc múi giờ máy chủ."""
+    now = int(now)
+    return now - (now + VN_UTC_OFFSET) % 86400
+
+
+def _vn_week_start(now):
+    """Mốc 00:00 THỨ HAI (giờ VN) của TUẦN chứa `now` (tuần tính T2 -> CN)."""
+    ds = _vn_day_start(now)
+    wd = ((ds + VN_UTC_OFFSET) // 86400 + 3) % 7          # 1970-01-01 là thứ Năm -> T2 = 0 … CN = 6
+    return ds - wd * 86400
+
+
 def _revenue_calc(d, now):
-    """Doanh thu theo cửa sổ TRƯỢT 1 ngày (24 giờ) · 1 tuần (7 ngày) · 1 tháng (30 ngày) tính từ lúc KÍCH HOẠT key, tách theo game.
-       Nguồn = sổ d["rev"] + các key người dùng ĐÃ kích hoạt từ trước bản này mà chưa có trong sổ (tính theo giá hiện tại, thời điểm = lúc kích hoạt; key cũ không có trường act = lúc tạo)."""
+    """Doanh thu tính từ lúc KÍCH HOẠT key, tách theo game:
+         · \"ngay\"  = HÔM NAY: từ 00:00 hôm nay (giờ VN) tới giờ — qua 00:00 ngày mới là về 0 (KHÔNG phải cứ đủ 24 giờ)
+         · \"tuan\"  = TUẦN NÀY: từ 00:00 thứ Hai (giờ VN) tới giờ — sang thứ Hai mới là về 0
+         · \"thang\" = 30 ngày gần nhất (cửa sổ trượt như cũ)
+       Mỗi cửa sổ trả thêm \"tu\" (mốc bắt đầu, epoch) và \"den\" (mốc reset kế tiếp, None với tháng) để trang admin tự làm mới khi qua mốc.
+       Nguồn = sổ d[\"rev\"] + các key người dùng ĐÃ kích hoạt từ trước bản này mà chưa có trong sổ (tính theo giá hiện tại, thời điểm = lúc kích hoạt; key cũ không có trường act = lúc tạo)."""
     ent = {}
     for k, v in (d.get("rev") or {}).items():
         if isinstance(v, dict):
@@ -5187,13 +5243,14 @@ def _revenue_calc(d, now):
         t = int(r.get("act") or r.get("created") or 0)
         if t:
             ent[k] = (t, _key_game(r), int(r.get("days") or 0), _key_price(r.get("days")))
-    wins = (("ngay", 86400), ("tuan", 7 * 86400), ("thang", 30 * 86400))
+    ds, ws = _vn_day_start(now), _vn_week_start(now)
+    wins = (("ngay", ds, ds + 86400), ("tuan", ws, ws + 7 * 86400), ("thang", int(now) - 30 * 86400, None))
     games = list(KEY_GAMES) + ["all"] + [g for g in _KEY_DEAD_GAMES if any(e[1] == g for e in ent.values())]   # game đã gỡ chỉ hiện khi còn doanh thu cũ
-    out = {w: {"tong": 0, "so_key": 0, "chua_co_gia": 0, "game": {g: {"tien": 0, "so_key": 0} for g in games}} for w, _ in wins}
+    out = {w: {"tu": t0, "den": t1, "tong": 0, "so_key": 0, "chua_co_gia": 0, "game": {g: {"tien": 0, "so_key": 0} for g in games}} for w, t0, t1 in wins}
     for t, g, days, price in ent.values():
         g = g if g in games else "all"
-        for w, sec in wins:
-            if now - sec <= t <= now + 60:
+        for w, t0, _t1 in wins:
+            if t0 <= t <= now + 60:
                 o = out[w]
                 if price > 0:
                     o["tong"] += price
@@ -5223,7 +5280,7 @@ def _check_user_key(k, hw=None, ip="", ua="", alts=(), fresh=False, game=None, b
         if not _game_ok(kg, game):
             return None, (f"{WRONG_GAME_MSG} {KEY_GAME_LABEL.get(kg, kg)} — không dùng được cho game {KEY_GAME_LABEL.get(game, game)}. "
                           f"Hãy dùng key {KEY_GAME_LABEL.get(game, game)} (hoặc xin admin tạo key {KEY_GAME_LABEL.get(game, game)})."), True, kg
-        if not bind:                                     # bind=False (auto cược LC): KHÔNG giới hạn / gắn thiết bị — điện thoại, máy tính, nhiều máy đều vào được bằng cùng 1 key
+        if not bind:                                     # bind=False: KHÔNG gắn / giới hạn thiết bị (auto cược LC chỉ vào nhánh này khi đặt SUNVIW_AB_BIND_DEVICE=0)
             ch = False
         elif hw:
             ok, err, ch = _dev_use(r, hw, ip, ua, now, alts, fresh)
@@ -6132,7 +6189,7 @@ def api_admin_keys():
 
 @app.route("/api/admin/revenue")
 def api_admin_revenue():
-    """Doanh thu tự tính theo giá KEY_PRICE khi key được kích hoạt (Sun · Hit · LC79): 1 ngày / 1 tuần / 1 tháng. CHỈ ADMIN CHÍNH — admin phụ và key người dùng đều bị từ chối."""
+    """Doanh thu tự tính theo giá KEY_PRICE khi key được kích hoạt (Sun · Hit · LC79): HÔM NAY (reset 00:00 giờ VN) / TUẦN NÀY (reset 00:00 thứ Hai) / 30 ngày. CHỈ ADMIN CHÍNH — admin phụ và key người dùng đều bị từ chối."""
     s, err = _need_admin()
     if err:
         return err
@@ -6516,7 +6573,7 @@ textarea.in{font:inherit;color:inherit}
 <script>
 /*__HWID_JS__*/
 const $=s=>document.querySelector(s),esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const fmt=t=>t?new Date(t*1000).toLocaleString('vi-VN'):'—',now=()=>Date.now()/1000;
+const fmt=t=>t?new Date(t*1000).toLocaleString('vi-VN'):'—',now=()=>Date.now()/1000,SOON=3*3600;
 const left=s=>{if(s<=0)return'đã hết hạn';const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60);return'còn '+(d?d+' ngày '+h+' giờ':h?h+' giờ '+m+' phút':m+' phút')};
 const ago=t=>{const s=Math.max(0,now()-t|0);return s<60?'vừa xong':s<3600?(s/60|0)+' phút trước':s<86400?(s/3600|0)+' giờ trước':(s/86400|0)+' ngày trước'};
 const shw=h=>String(h).length>14?h.slice(0,8)+'…'+h.slice(-4):h,vnd=n=>Number(n||0).toLocaleString('vi-VN')+' đ',fN=n=>Number(n||0).toLocaleString('vi-VN'),fNet=n=>(n>=0?'+':'')+fN(n);
@@ -6560,11 +6617,11 @@ async function boot(){shell();await loadKeys();if(isM()){loadPv();loadOs();loadR
 async function loadKeys(){const j=await api('/api/admin/keys');if(!S)return;if(j.ok){KEYS=j.keys;lastT=now();DAYS=j.ngay||DAYS;DEVO=j.so_tb||DEVO;GAMES=j.games||GAMES;const h=new Set(KEYS.map(r=>r.key));SEL=new Set([...SEL].filter(k=>h.has(k)))}paint()}
 async function loadPv(){const j=await api('/api/admin/panel');if(S&&j.ok){PV=j.devices;paint()}}
 async function loadOs(){const j=await api('/api/admin/offserver');if(S&&j.ok){OS=j;paint()}}
-async function loadRv(){const j=await api('/api/admin/revenue');if(S&&j.ok){RV=j;paint()}}
+async function loadRv(){const j=await api('/api/admin/revenue');if(S&&j.ok){RV=j;RV._t=now();paint()}}
 async function loadAc(){const j=await api('/api/admin/cuocstatus');if(S&&j.ok){AC=j;paint()}}
 /* ── helpers key ── */
 const lf=r=>r.kich_hoat===false?r.con_lai:Math.max(0,r.het_han-now());
-const stt=r=>r.kich_hoat===false?['wait','Chờ kích hoạt']:lf(r)<=0?['ex','Hết hạn']:lf(r)<86400?['soon','Sắp hết']:['ok','Còn hạn'];
+const stt=r=>r.kich_hoat===false?['wait','Chờ kích hoạt']:lf(r)<=0?['ex','Hết hạn']:lf(r)<SOON?['soon','Sắp hết']:['ok','Còn hạn'];
 const gb=r=>r.loai==='user'?`<span class="bd g g-${esc(r.game)}">${esc(GL[r.game]||r.game)}</span>`:`<span class="bd">Admin phụ</span>`;
 function vis(){const q=F.q.toLowerCase();let a=KEYS.filter(r=>{const s=stt(r)[0],t=F.t;
   const m=t==='all'||(t==='live'?s!=='ex':t==='soon'?s==='soon':t==='exp'?s==='ex':t==='wait'?s==='wait':t==='user'||t==='sub'?r.loai===t:r.loai==='user'&&(r.game===t||r.game==='all'));
@@ -6579,7 +6636,7 @@ function row(r){const[s,l]=stt(r),tot=(r.ngay||1)*86400+(r.cong_gio||0),p=Math.m
 function renderKeys(){const a=vis(),n=SEL.size,m=isM(),c=(f,t)=>`<button data-f="${f}" class="${F.t===f?'on':''}">${t}</button>`;
  const live=KEYS.filter(r=>stt(r)[0]!=='ex').length;
  return `<div class="tb"><input class="in q" id="fq" placeholder="Tìm key, ghi chú, người tạo…  ( / )" value="${esc(F.q)}"><select class="in" id="fs"><option value="new">Mới tạo trước</option><option value="soon"${F.s==='soon'?' selected':''}>Sắp hết hạn trước</option><option value="used"${F.s==='used'?' selected':''}>Dùng gần nhất</option></select><button class="gh" data-a="rf">${I.rf}</button><button class="gh" data-a="csv">Xuất CSV</button>${m?`<button class="gh dg" data-a="clean">${I.del} Dọn key hết hạn</button>`:''}</div>
- <div class="cp">${c('all','Tất cả '+KEYS.length)}${c('live','Còn hạn '+live)}${c('soon','Sắp hết (&lt;24h)')}${c('exp','Hết hạn')}${c('wait','Chờ kích hoạt')}${GAMES.map(g=>c(g.id,esc(GL[g.id]||g.id))).join('')}${m?c('user','Key người dùng')+c('sub','Admin phụ'):''}</div>
+ <div class="cp">${c('all','Tất cả '+KEYS.length)}${c('live','Còn hạn '+live)}${c('soon','Sắp hết (&lt;3 giờ)')}${c('exp','Hết hạn')}${c('wait','Chờ kích hoạt')}${GAMES.map(g=>c(g.id,esc(GL[g.id]||g.id))).join('')}${m?c('user','Key người dùng')+c('sub','Admin phụ'):''}</div>
  <div class="sb"><label><input type="checkbox" id="sa"${a.length&&a.every(r=>SEL.has(r.key))?' checked':''}> Chọn ${a.length} key đang hiện</label><span class="sp"></span>${n?`<b>${n} đã chọn</b><button class="pr sm" data-a="badd" data-h="1">${I.clk} +1 giờ</button><button class="gh" data-a="baddc">${I.clk} Cộng tùy chọn…</button><button class="gh" data-a="bcp">${I.cp}</button><button class="gh dg" data-a="bdel">${I.del} Xóa</button>`:'<span class="s">Tích chọn nhiều key để cộng giờ / xóa hàng loạt</span>'}</div>
  <div class="cd" style="padding:4px 10px">${a.length?a.map(row).join(''):`<div class="em">${KEYS.length?'Không có key khớp bộ lọc.':'Chưa có key. Sang tab Tạo key.'}</div>`}</div>`}
 function openKey(k){const r=KEYS.find(x=>x.key===k);if(!r)return;const d=$('#dg'),[s,l]=stt(r);d.dataset.ask='';d.dataset.k=k;
@@ -6593,11 +6650,11 @@ function openKey(k){const r=KEYS.find(x=>x.key===k);if(!r)return;const d=$('#dg'
 /* ── view ── */
 function vOv(){const live=KEYS.filter(r=>stt(r)[0]!=='ex').length,soon=KEYS.filter(r=>stt(r)[0]==='soon').sort((a,b)=>lf(a)-lf(b)),pend=PV.filter(x=>x.trang_thai==='pending').length,dv=KEYS.reduce((n,r)=>n+r.so_dev,0);
  const by=g=>KEYS.filter(r=>r.loai==='user'&&r.game===g).length;
- return `<div class="gd"><div class="st"><b>${live}</b><span>Key còn hạn / ${KEYS.length}</span></div><div class="st"><b class="${soon.length?'noc':''}">${soon.length}</b><span>Sắp hết hạn (&lt;24h)</span></div><div class="st"><b>${dv}</b><span>Thiết bị đang gắn</span></div>${isM()?`<div class="st"><b class="${pend?'noc':''}">${pend}</b><span>Thiết bị chờ duyệt</span></div>`:''}</div>
+ return `<div class="gd"><div class="st"><b>${live}</b><span>Key còn hạn / ${KEYS.length}</span></div><div class="st"><b class="${soon.length?'noc':''}">${soon.length}</b><span>Sắp hết hạn (&lt;3 giờ)</span></div><div class="st"><b>${dv}</b><span>Thiết bị đang gắn</span></div>${isM()?`<div class="st"><b class="${pend?'noc':''}">${pend}</b><span>Thiết bị chờ duyệt</span></div>`:''}</div>
  <div class="cd"><div class="hd"><h2>Cần gia hạn ngay</h2>${soon.length?`<button class="pr sm" data-a="allsoon">${I.clk} +1 giờ cho cả ${soon.length} key</button>`:''}</div>${soon.length?soon.slice(0,8).map(row).join(''):'<div class="em">Không có key nào sắp hết hạn.</div>'}</div>
  ${isM()&&OS&&OS.any?`<div class="cd" style="border-color:var(--no)"><div class="hd"><h2><span class="osd off"></span> Đang OFF SERVER: ${OS.tables.filter(r=>r.off).map(r=>esc(r.ten)).join(' · ')}</h2><button class="gh" data-a="osgo">Quản lý</button></div><div class="s mu">Tool ngoài dùng các bàn này đang không lấy được dự đoán.</div></div>`:''}
  <div class="cd"><h2>Key theo game</h2><div class="pl">${GAMES.map(g=>`<span class="bd g g-${esc(g.id)}" style="height:30px;padding:0 12px;font-size:13px">${esc(GL[g.id]||g.id)} · ${by(g.id)}</span>`).join('')}</div></div>
- ${isM()&&RV?`<div class="cd"><h2>Doanh thu</h2><div class="gd" style="margin:0">${[['ngay','24 giờ'],['tuan','7 ngày'],['thang','30 ngày']].map(([k,t])=>`<div class="st"><b style="font-size:21px">${vnd(RV.doanh_thu[k].tong)}</b><span>${t} · ${RV.doanh_thu[k].so_key} key</span></div>`).join('')}</div></div>`:''}`}
+ ${isM()&&RV?`<div class="cd"><h2>Doanh thu</h2><div class="gd" style="margin:0">${[['ngay','Hôm nay'],['tuan','Tuần này'],['thang','30 ngày']].map(([k,t])=>`<div class="st"><b style="font-size:21px">${vnd(RV.doanh_thu[k].tong)}</b><span>${t} · ${RV.doanh_thu[k].so_key} key</span></div>`).join('')}</div></div>`:''}`}
 function vMk(){const m=isM(),pb=(id,arr,cur,lab)=>`<div class="pl" id="${id}">${arr.map(v=>`<button data-c="${id}" data-v="${esc(v)}" class="${v==cur?'on':''}">${esc(lab(v))}</button>`).join('')}</div>`;
  return `<div class="cd"><h2>Tạo key mới</h2>${m?`<div class="lb">Loại key</div>${pb('type',['user','sub'],CF.type,v=>v==='user'?'Key người dùng':'Key admin phụ')}`:''}
  ${CF.type==='user'?`<div class="lb">Game <span class="mu s">— mỗi key chỉ dùng cho 1 game</span></div>${pb('game',GAMES.map(g=>g.id),CF.game,v=>GL[v]||v)}`:''}
@@ -6621,7 +6678,7 @@ function openAc(id){const s=((AC&&AC.sessions)||[]).find(x=>x.id===id);if(!s)ret
  <div class="gd" style="margin-top:12px">${c(fN(s.balance),'Số dư')}${c(fNet(s.net),'Lãi / lỗ',s.net>=0?'okc':'noc')}${c(s.wins+' / '+s.losses,'Thắng / thua')}${c(fN(s.total_bet),'Tổng đã cược')}</div>
  <h4>Chiến thuật</h4><div><b>${esc(s.ten)}</b></div><ul class="s" style="margin:6px 0;padding-left:18px">${(s.chien_thuat||[]).map(x=>`<li>${esc(x)}</li>`).join('')}</ul>
  <div class="da" style="justify-content:flex-start">${s.alive?`<button class="gh dg" data-a="acs" data-v="${esc(s.id)}">Dừng auto cược</button>`:''}<button class="gh dg" data-a="acx" data-v="${esc(s.id)}">Xóa tài khoản</button></div></div>`;if(!d.open)d.showModal()}
-function vRv(){if(!RV)return'<div class="em">Đang tải…</div>';const W=[['ngay','1 ngày','24 giờ gần nhất'],['tuan','1 tuần','7 ngày gần nhất'],['thang','1 tháng','30 ngày gần nhất']];
+function vRv(){if(!RV)return'<div class="em">Đang tải…</div>';const W=[['ngay','Hôm nay','từ 00:00 hôm nay · qua 00:00 là về 0'],['tuan','Tuần này','từ 00:00 thứ Hai · sang thứ Hai mới là về 0'],['thang','1 tháng','30 ngày gần nhất']];
  return `<div class="gd">${W.map(([k,t,sub])=>`<div class="st"><b style="font-size:23px">${vnd(RV.doanh_thu[k].tong)}</b><span>${t} · ${RV.doanh_thu[k].so_key} key<br>${sub}</span></div>`).join('')}</div>
  <div class="cd"><div class="hd"><h2>Theo game</h2><button class="gh" data-a="rvrf">${I.rf}</button></div>${W.map(([k,t])=>{const o=RV.doanh_thu[k];return `<p style="margin:6px 0"><b>${t}:</b> ${Object.keys(o.game).filter(g=>g!=='all'||o.game[g].so_key).map(g=>`<span class="bd g g-${esc(g)}">${esc(GL[g]||g)}</span> ${vnd(o.game[g].tien)} <span class="mu s">(${o.game[g].so_key} key)</span>`).join(' &nbsp; ')}</p>`}).join('')}<div class="s mu" style="margin-top:8px">Bảng giá: ${Object.entries(RV.bang_gia).map(([d,p])=>(DL[d]||d+' ngày')+' = '+vnd(p)).join(' · ')}. Giờ cộng thêm không tính vào doanh thu.</div></div>`}
 /* ── thông báo tới tool (CHỈ admin chính; server kiểm lại mọi request) ── */
@@ -6798,7 +6855,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Enter'&&['k','un'].includes(
 try{document.documentElement.dataset.t=localStorage.getItem('th')||(matchMedia('(prefers-color-scheme:dark)').matches?'d':'l')}catch(e){}
 setInterval(()=>{if(!S||!$('#vw'))return;document.querySelectorAll('[data-l]').forEach(e=>{e.textContent=left(Math.max(0,+e.dataset.l-now()))})},15000);
 setInterval(()=>{if(S&&$('#vw')&&!document.hidden)loadKeys()},60000);
-setInterval(()=>{if(S&&isM()&&$('#vw')&&!document.hidden){loadPv();loadOs();if(V==='ac')loadAc();if(V==='nt')loadNt()}},6000);
+setInterval(()=>{if(S&&isM()&&$('#vw')&&!document.hidden){loadPv();loadOs();if(V==='ac')loadAc();if(V==='nt')loadNt();if(RV&&RV.doanh_thu&&now()>=RV.doanh_thu.ngay.den&&now()-(RV._t||0)>20)loadRv()}},6000);
 if(S)boot();else login0();
 </script></body></html>
 """
@@ -8620,7 +8677,7 @@ def _ab_gate():
     k = _norm_key(request.headers.get("X-User-Key", ""))
     if not _rate_ok(f"abip:{ip}", RATE_IP) or (k and not _rate_ok(f"abk:{k}", 240)):
         return _too_many()
-    rec, err, exists, kg = _check_user_key(k, hw, ip, request.headers.get("User-Agent", ""), alts, hfresh, "autolc", bind=False)
+    rec, err, exists, kg = _check_user_key(k, hw, ip, request.headers.get("User-Agent", ""), alts, hfresh, "autolc", bind=AB_KEY_BIND_DEVICE)
     if not rec:
         if k and not exists:
             _rl_fail(ip)
@@ -8679,6 +8736,12 @@ def _ab_get(sid):
 @app.route("/autocuoc")
 def tool_autocuoc():
     """Chỉ trả MÀN NHẬP KEY (không chứa giao diện auto cược). Nhập đúng key -> trình duyệt gọi /tool/autocuoc/ui kèm key để nhận giao diện."""
+    if not AB_SERVE_UI:                                  # giao diện đã tách ra file autocuoc.html (host riêng) -> chuyển hướng sang AUTOBET_UI_URL
+        if AB_UI_URL:
+            resp = redirect(AB_UI_URL, 302)
+            resp.headers["Cache-Control"] = "no-store"
+            return resp
+        abort(404)
     resp = Response(AB_SHELL.replace("/*__HWID_JS__*/", HWID_JS), content_type="text/html; charset=utf-8")
     resp.headers["Cache-Control"] = "no-store"
     resp.headers["X-Robots-Tag"] = "noindex, nofollow"
@@ -8688,6 +8751,8 @@ def tool_autocuoc():
 @app.route("/tool/autocuoc/ui")
 def tool_autocuoc_ui():
     """Giao diện auto cược (css + html + js) — CHỈ trả khi key AUTO CƯỢC LC hợp lệ (header X-User-Key + X-HWID)."""
+    if not AB_SERVE_UI:
+        abort(404)
     g = _ab_gate()
     if g is not None:
         return g
@@ -9807,6 +9872,10 @@ def _sec_report():
         w.append("LC_MD5_API_URL / LC_HU_API_URL chua dat -> URL (kem token at=) dang nam trong code")
     if not os.environ.get("AUTOBET_AT_TOKENS"):
         w.append("AUTOBET_AT_TOKENS chua dat -> token at dang nam trong code")
+    if not AB_SERVE_UI and not AB_ALLOWED_ORIGINS:
+        w.append("AUTOBET_SERVE_UI=0 nhung AUTOBET_UI_URL va AUTOBET_ALLOWED_ORIGINS deu trong -> file autocuoc.html KHONG goi duoc API (dat AUTOBET_UI_URL hoac AUTOBET_ALLOWED_ORIGINS=https://panel-cua-ban)")
+    if "*" in AB_ALLOWED_ORIGINS:
+        w.append("AUTOBET_ALLOWED_ORIGINS=* -> moi trang web deu goi cheo duoc API auto cuoc (van can key + HWID) · nen ghi dung origin cua panel")
     if IP_TRUST_PROXY and not IP_HEADER:
         w.append(f"IP client lay tu X-Forwarded-For, phan tu thu {IP_PROXY_HOPS} tinh tu cuoi (SUNVIW_PROXY_HOPS). Neu nhieu nguoi bi tinh CHUNG 1 IP (khoa nham) thi tang SUNVIW_PROXY_HOPS hoac dat SUNVIW_IP_HEADER")
     if not DEV_TOKEN_STRICT:
@@ -10036,7 +10105,7 @@ def main():
     _off = offsrv_state()["off_list"]
     print(f"OFF SERVER  ->  {('DANG OFF: ' + ', '.join(_off) + ' (tool ngoai khong nhan duoc du doan cua cac ban nay, chi panel / admin nhan)') if _off else 'khong ban nao off'} · bat / tat TUNG BAN o tab 'Off server' trang /api/admin (chi admin chinh) · file {OFFSRV_PATH}")
     print(f"PANEL HTML  ->  thiet bi phai duoc admin chinh duyet (khong can key, vao ca Sun + Hit) · file {PANEL_DEV_PATH} · toi da {PANEL_MAX_PENDING_PER_IP} yeu cau cho duyet / IP")
-    print(f"AUTO CUOC   ->  {'BAT' if AB_ENABLED else 'TAT'} · http://{a.host}:{a.port}/tool/autocuoc · nguon du doan {' + '.join(AB_TABLE_KEYS)} · luu mat khau {'CO (AUTOBET_SAVE_PW=1)' if AB_SAVE_PW else 'KHONG (chi RAM)'} · file {AB_PATH}")
+    print(f"AUTO CUOC   ->  {'BAT' if AB_ENABLED else 'TAT'} · {AB_UI_URL if (AB_UI_URL and not AB_SERVE_UI) else f'http://{a.host}:{a.port}/tool/autocuoc'} · nguon du doan {' + '.join(AB_TABLE_KEYS)} · luu mat khau {'CO (AUTOBET_SAVE_PW=1)' if AB_SAVE_PW else 'KHONG (chi RAM)'} · file {AB_PATH}")
     print(f"WR 100 phien ->  luu toi da {PERSIST_KEEP} van da cham · WR dung/sai xet {EVAL_WINDOW} van gan nhat")
     print(f"WR          ->  xet {WR_WINDOW} van gan nhat, trong so cao nhat x{WR_WEIGHT_NEWEST}, flip trong so {'BAT (cu nhat nang nhat)' if WR_FLIP_WEIGHT else 'TAT (moi nhat nang nhat)'}, trong so (cu -> moi): "
           + " · ".join(f"{w:.2f}" for w in wr_weights_full()))
