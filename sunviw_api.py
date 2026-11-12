@@ -24,7 +24,7 @@ Endpoint:
     ...?hist=N                   -> (mọi game) thêm lich_su: N ván đúng/sai gần nhất, mới -> cũ
     GET /api/predictlcmd5        -> [LC MD5] JSON dự đoán (game="lc79", ban="lcmd5"; tên cũ Tele68 MD5 — /api/predicttele68txmd5 vẫn chạy như alias); nguồn trả CẢ DANH SÁCH ~105 phiên, tool chỉ lưu thêm phiên chưa có, dự đoán phiên mới nhất + 1 và giữ tới khi API trả kết quả phiên đó (xem khối "CONFIG LC")
     GET /api/predictlchu         -> [LC HŨ] JSON dự đoán (game="lc79", ban="lchu"); nguồn https://wtx.tele68.com/v1/tx/sessions (cùng định dạng list với LC MD5), config + data RIÊNG (khối "CONFIG LC"). Key game LC79 dùng được cả 2 bàn LC
-    GET /tool/autocuoc           -> (chuyển hướng 302 sang https://autocuoclc79.netlify.app/ — đổi bằng AUTOBET_UI_URL) [AUTO CƯỢC LC79 · 1 TÀI KHOẢN = 1 TAB, 2 BÀN MD5 + HŨ: luật cược riêng từng bàn, mục tiêu lãi + tự rút DÙNG CHUNG] trang web điều khiển auto cược + auto rút (thay bot Telegram): đăng nhập LC79, bật/tắt từng luật (x2 thắng/thua, giảm cược, pause, mục tiêu lãi, tự rút Momo/Ngân hàng), biểu đồ lãi/lỗ. GIAO DIỆN BỊ ẨN: chỉ có ô nhập KEY AUTO CƯỢC LC (game "autolc", tiền tố AUTOLC-, tạo ở /api/admin); nhập đúng key mới nhận được giao diện, và MỖI request /tool/autocuoc/api/* (kể cả nhận dự đoán) đều phải kèm X-User-Key + X-HWID. Mỗi key chỉ thấy tài khoản LC79 của mình; key hết hạn -> phiên auto cược tự dừng. Chạy gunicorn --workers 1 (xem khối "AUTO CƯỢC LC79")
+    GET /tool/autocuoc           -> [AUTO CƯỢC LC79 · 1 TÀI KHOẢN = 1 TAB, 2 BÀN MD5 + HŨ: luật cược riêng từng bàn, mục tiêu lãi + tự rút DÙNG CHUNG] trang web điều khiển auto cược + auto rút (thay bot Telegram): đăng nhập LC79, bật/tắt từng luật (x2 thắng/thua, giảm cược, pause, mục tiêu lãi, tự rút Momo/Ngân hàng), biểu đồ lãi/lỗ. GIAO DIỆN BỊ ẨN: chỉ có ô nhập KEY AUTO CƯỢC LC (game "autolc", tiền tố AUTOLC-, tạo ở /api/admin); nhập đúng key mới nhận được giao diện, và MỖI request /tool/autocuoc/api/* (kể cả nhận dự đoán) đều phải kèm X-User-Key + X-HWID. Mỗi key chỉ thấy tài khoản LC79 của mình; key hết hạn -> phiên auto cược tự dừng. Chạy gunicorn --workers 1 (xem khối "AUTO CƯỢC LC79")
     GET /api/html                -> panel HTML theo dõi Sun + Hit, đổi qua lại, chọn số ván lịch sử. CHỈ MỞ KHI ADMIN CHÍNH DUYỆT THIẾT BỊ (HWID): máy lạ thấy bảng "Đang chờ admin duyệt", được duyệt thì tự mở, KHÔNG cần key, vào cả Sun + Hit
     GET /api/panel/status        -> panel hỏi trạng thái duyệt của thiết bị này (gửi yêu cầu lần đầu): {"status": "approved" | "pending" | "denied" | "limit"} (xem khối "DUYỆT THIẾT BỊ VÀO PANEL")
     GET /api/admin/panel (+ POST /approve · /deny · /remove · /ban · /unban) -> admin CHÍNH xem + duyệt / từ chối / gỡ quyền / BAN (danh sách đen: chặn cả IP + thiết bị khỏi /api/html, trả 404) thiết bị vào panel (mục "Duyệt thiết bị vào panel HTML" ở trang /api/admin)
@@ -4362,7 +4362,7 @@ def ip_health():
 
 
 # ─── FLASK ────────────────────────────────────────────────────────────────
-from flask import Flask, Response, abort, redirect, request  # noqa: E402
+from flask import Flask, Response, abort, request  # noqa: E402
 from flask import g as flask_g  # noqa: E402  (đặt tên khác vì nhiều hàm dùng biến cục bộ `g`)
 
 os.umask(0o077)                                    # file dữ liệu (key / thiết bị / phiên) chỉ chủ tiến trình đọc được
@@ -4456,35 +4456,6 @@ _CORS_EXACT = {"/", "/health", "/api/key/check", "/api/predictsun", "/api/predic
                "/api/predictlcmd5", "/api/predictlchu", "/api/predicttele68txmd5", "/api/notice"}
 _NOFRAME_PREFIX = ("/api/admin", "/tool/autocuoc", "/api/autocuoc", "/autocuoc")
 
-# ── AUTO CƯỢC: GIAO DIỆN TÁCH RA FILE HTML RIÊNG (autocuoc.html), server chỉ còn là API ──────────────────────────
-#   AUTOBET_SERVE_UI=0 (mặc định)  server KHÔNG còn trả giao diện: /tool/autocuoc, /tool/autocuoc/ui (+ alias) -> 404. =1 để bật lại giao diện cũ.
-#   AUTOBET_ALLOWED_ORIGINS        danh sách origin của PANEL chứa file autocuoc.html, cách nhau dấu phẩy, vd: https://panel.example.com
-#                                  (file mở thẳng từ ổ đĩa có Origin "null" -> phải ghi rõ "null"; "*" = mọi origin, KHÔNG khuyên dùng).
-#                                  Chỉ origin trong danh sách mới được gọi chéo /tool/autocuoc/api/* từ trình duyệt; origin khác bị chặn như cũ.
-#   Mọi request vẫn BẮT BUỘC X-User-Key (key autolc) + X-HWID: CORS chỉ quyết định trình duyệt có cho trang khác đọc phản hồi hay không,
-#   KHÔNG thay cho xác thực. Xác thực và gắn thiết bị vẫn nằm hoàn toàn ở server (_ab_gate).
-#   AUTOBET_UI_URL                 LINK GIAO DIỆN AUTO CƯỢC (mặc định https://autocuoclc79.netlify.app/). Khi AUTOBET_SERVE_UI=0, mở /tool/autocuoc
-#                                  (và /api/autocuoc, /autocuoc) sẽ tự chuyển hướng sang link này. Origin của link này luôn được tự thêm vào
-#                                  AUTOBET_ALLOWED_ORIGINS để trang đó gọi được API. Đặt AUTOBET_UI_URL="" để tắt chuyển hướng (quay lại trả 404).
-AB_SERVE_UI = _env_bool("AUTOBET_SERVE_UI", False)
-AB_API_PREFIX = "/tool/autocuoc/api/"
-AB_UI_URL = os.environ.get("AUTOBET_UI_URL", "https://autocuoclc79.netlify.app/").strip()
-if AB_UI_URL and not AB_UI_URL.lower().startswith(("http://", "https://")):
-    AB_UI_URL = ""                                       # chỉ nhận link http(s) — tránh chuyển hướng tới scheme lạ (javascript:, data:...)
-AB_ALLOWED_ORIGINS = {o.strip().rstrip("/").lower() for o in os.environ.get("AUTOBET_ALLOWED_ORIGINS", "").split(",") if o.strip()}
-if AB_UI_URL:                                            # origin của trang giao diện luôn được phép gọi chéo API (vẫn bắt buộc key + HWID)
-    _ab_ui_p = urllib.parse.urlsplit(AB_UI_URL)
-    if _ab_ui_p.scheme and _ab_ui_p.netloc:
-        AB_ALLOWED_ORIGINS.add(f"{_ab_ui_p.scheme}://{_ab_ui_p.netloc}".lower())
-
-
-def _ab_origin_ok():
-    """Request tới /tool/autocuoc/api/* có Origin nằm trong AUTOBET_ALLOWED_ORIGINS không (chỉ để cho phép gọi chéo từ file HTML auto cược)."""
-    if not AB_ALLOWED_ORIGINS or not request.path.startswith(AB_API_PREFIX):
-        return False
-    o = request.headers.get("Origin", "").strip().rstrip("/").lower()
-    return bool(o) and ("*" in AB_ALLOWED_ORIGINS or o in AB_ALLOWED_ORIGINS)
-
 
 def _is_https():
     return request.is_secure or request.headers.get("X-Forwarded-Proto", "").split(",")[-1].strip().lower() == "https"
@@ -4498,12 +4469,6 @@ def _cors(resp):
         resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
         resp.headers["Access-Control-Allow-Headers"] = request.headers.get("Access-Control-Request-Headers") or "Content-Type, X-User-Key, X-HWID, X-HWID-ALT, X-HWID-FRESH, X-Device-Token"
         resp.headers["Access-Control-Max-Age"] = "600"
-    elif _ab_origin_ok():                               # API auto cược: CHỈ origin của panel (AUTOBET_ALLOWED_ORIGINS) mới được trình duyệt cho đọc phản hồi
-        resp.headers["Access-Control-Allow-Origin"] = "*" if "*" in AB_ALLOWED_ORIGINS else request.headers.get("Origin", "")
-        resp.headers["Vary"] = "Origin"
-        resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-        resp.headers["Access-Control-Allow-Headers"] = "Content-Type, X-User-Key, X-HWID, X-HWID-ALT, X-HWID-FRESH"
-        resp.headers["Access-Control-Max-Age"] = "600"
     resp.headers["Cache-Control"] = "no-store"
     resp.headers["X-Content-Type-Options"] = "nosniff"
     resp.headers["Referrer-Policy"] = "no-referrer"
@@ -4512,7 +4477,7 @@ def _cors(resp):
     if "Content-Security-Policy" not in resp.headers:
         resp.headers["Content-Security-Policy"] = "frame-ancestors 'none'; base-uri 'none'; object-src 'none'; form-action 'self'"
     resp.headers["Cross-Origin-Opener-Policy"] = "same-origin"
-    resp.headers["Cross-Origin-Resource-Policy"] = "same-origin" if (p not in _CORS_EXACT and not _ab_origin_ok()) else "cross-origin"
+    resp.headers["Cross-Origin-Resource-Policy"] = "same-origin" if p not in _CORS_EXACT else "cross-origin"
     resp.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=()"
     if _is_https():
         resp.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
@@ -4600,8 +4565,6 @@ def _probe_guard():
 @app.before_request
 def _csrf_origin():
     """POST / PUT / DELETE có Origin khác host (trang web lạ gọi chéo) -> 403, trừ các endpoint công khai dùng key (có CORS)."""
-    if _ab_origin_ok():                                 # panel auto cược đã khai báo (AUTOBET_ALLOWED_ORIGINS) -> bỏ qua kiểm origin; xác thực vẫn bằng key + HWID trong _ab_gate
-        return None
     if request.method in ("POST", "PUT", "PATCH", "DELETE") and request.path not in _CORS_EXACT:
         o = request.headers.get("Origin", "")
         if o and o != "null":
@@ -8736,12 +8699,6 @@ def _ab_get(sid):
 @app.route("/autocuoc")
 def tool_autocuoc():
     """Chỉ trả MÀN NHẬP KEY (không chứa giao diện auto cược). Nhập đúng key -> trình duyệt gọi /tool/autocuoc/ui kèm key để nhận giao diện."""
-    if not AB_SERVE_UI:                                  # giao diện đã tách ra file autocuoc.html (host riêng) -> chuyển hướng sang AUTOBET_UI_URL
-        if AB_UI_URL:
-            resp = redirect(AB_UI_URL, 302)
-            resp.headers["Cache-Control"] = "no-store"
-            return resp
-        abort(404)
     resp = Response(AB_SHELL.replace("/*__HWID_JS__*/", HWID_JS), content_type="text/html; charset=utf-8")
     resp.headers["Cache-Control"] = "no-store"
     resp.headers["X-Robots-Tag"] = "noindex, nofollow"
@@ -8751,8 +8708,6 @@ def tool_autocuoc():
 @app.route("/tool/autocuoc/ui")
 def tool_autocuoc_ui():
     """Giao diện auto cược (css + html + js) — CHỈ trả khi key AUTO CƯỢC LC hợp lệ (header X-User-Key + X-HWID)."""
-    if not AB_SERVE_UI:
-        abort(404)
     g = _ab_gate()
     if g is not None:
         return g
@@ -9872,10 +9827,6 @@ def _sec_report():
         w.append("LC_MD5_API_URL / LC_HU_API_URL chua dat -> URL (kem token at=) dang nam trong code")
     if not os.environ.get("AUTOBET_AT_TOKENS"):
         w.append("AUTOBET_AT_TOKENS chua dat -> token at dang nam trong code")
-    if not AB_SERVE_UI and not AB_ALLOWED_ORIGINS:
-        w.append("AUTOBET_SERVE_UI=0 nhung AUTOBET_UI_URL va AUTOBET_ALLOWED_ORIGINS deu trong -> file autocuoc.html KHONG goi duoc API (dat AUTOBET_UI_URL hoac AUTOBET_ALLOWED_ORIGINS=https://panel-cua-ban)")
-    if "*" in AB_ALLOWED_ORIGINS:
-        w.append("AUTOBET_ALLOWED_ORIGINS=* -> moi trang web deu goi cheo duoc API auto cuoc (van can key + HWID) · nen ghi dung origin cua panel")
     if IP_TRUST_PROXY and not IP_HEADER:
         w.append(f"IP client lay tu X-Forwarded-For, phan tu thu {IP_PROXY_HOPS} tinh tu cuoi (SUNVIW_PROXY_HOPS). Neu nhieu nguoi bi tinh CHUNG 1 IP (khoa nham) thi tang SUNVIW_PROXY_HOPS hoac dat SUNVIW_IP_HEADER")
     if not DEV_TOKEN_STRICT:
@@ -10105,7 +10056,7 @@ def main():
     _off = offsrv_state()["off_list"]
     print(f"OFF SERVER  ->  {('DANG OFF: ' + ', '.join(_off) + ' (tool ngoai khong nhan duoc du doan cua cac ban nay, chi panel / admin nhan)') if _off else 'khong ban nao off'} · bat / tat TUNG BAN o tab 'Off server' trang /api/admin (chi admin chinh) · file {OFFSRV_PATH}")
     print(f"PANEL HTML  ->  thiet bi phai duoc admin chinh duyet (khong can key, vao ca Sun + Hit) · file {PANEL_DEV_PATH} · toi da {PANEL_MAX_PENDING_PER_IP} yeu cau cho duyet / IP")
-    print(f"AUTO CUOC   ->  {'BAT' if AB_ENABLED else 'TAT'} · {AB_UI_URL if (AB_UI_URL and not AB_SERVE_UI) else f'http://{a.host}:{a.port}/tool/autocuoc'} · nguon du doan {' + '.join(AB_TABLE_KEYS)} · luu mat khau {'CO (AUTOBET_SAVE_PW=1)' if AB_SAVE_PW else 'KHONG (chi RAM)'} · file {AB_PATH}")
+    print(f"AUTO CUOC   ->  {'BAT' if AB_ENABLED else 'TAT'} · http://{a.host}:{a.port}/tool/autocuoc · nguon du doan {' + '.join(AB_TABLE_KEYS)} · luu mat khau {'CO (AUTOBET_SAVE_PW=1)' if AB_SAVE_PW else 'KHONG (chi RAM)'} · file {AB_PATH}")
     print(f"WR 100 phien ->  luu toi da {PERSIST_KEEP} van da cham · WR dung/sai xet {EVAL_WINDOW} van gan nhat")
     print(f"WR          ->  xet {WR_WINDOW} van gan nhat, trong so cao nhat x{WR_WEIGHT_NEWEST}, flip trong so {'BAT (cu nhat nang nhat)' if WR_FLIP_WEIGHT else 'TAT (moi nhat nang nhat)'}, trong so (cu -> moi): "
           + " · ".join(f"{w:.2f}" for w in wr_weights_full()))
