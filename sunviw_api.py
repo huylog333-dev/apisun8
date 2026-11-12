@@ -24,11 +24,11 @@ Endpoint:
     ...?hist=N                   -> (mọi game) thêm lich_su: N ván đúng/sai gần nhất, mới -> cũ
     GET /api/predictlcmd5        -> [LC MD5] JSON dự đoán (game="lc79", ban="lcmd5"; tên cũ Tele68 MD5 — /api/predicttele68txmd5 vẫn chạy như alias); nguồn trả CẢ DANH SÁCH ~105 phiên, tool chỉ lưu thêm phiên chưa có, dự đoán phiên mới nhất + 1 và giữ tới khi API trả kết quả phiên đó (xem khối "CONFIG LC")
     GET /api/predictlchu         -> [LC HŨ] JSON dự đoán (game="lc79", ban="lchu"); nguồn https://wtx.tele68.com/v1/tx/sessions (cùng định dạng list với LC MD5), config + data RIÊNG (khối "CONFIG LC"). Key game LC79 dùng được cả 2 bàn LC
-    GET /tool/autocuoc           -> [AUTO CƯỢC LC79] trang web điều khiển auto cược + auto rút (thay bot Telegram): đăng nhập LC79, bật/tắt từng luật (x2 thắng/thua, giảm cược, pause, mục tiêu lãi, tự rút Momo/Ngân hàng), biểu đồ lãi/lỗ. GIAO DIỆN BỊ ẨN: chỉ có ô nhập KEY AUTO CƯỢC LC (game "autolc", tiền tố AUTOLC-, tạo ở /api/admin); nhập đúng key mới nhận được giao diện, và MỖI request /tool/autocuoc/api/* (kể cả nhận dự đoán) đều phải kèm X-User-Key + X-HWID. Mỗi key chỉ thấy tài khoản LC79 của mình; key hết hạn -> phiên auto cược tự dừng. Chạy gunicorn --workers 1 (xem khối "AUTO CƯỢC LC79")
+    GET /tool/autocuoc           -> [AUTO CƯỢC LC79 · 2 BÀN MD5 + HŨ, config riêng từng bàn] trang web điều khiển auto cược + auto rút (thay bot Telegram): đăng nhập LC79, bật/tắt từng luật (x2 thắng/thua, giảm cược, pause, mục tiêu lãi, tự rút Momo/Ngân hàng), biểu đồ lãi/lỗ. GIAO DIỆN BỊ ẨN: chỉ có ô nhập KEY AUTO CƯỢC LC (game "autolc", tiền tố AUTOLC-, tạo ở /api/admin); nhập đúng key mới nhận được giao diện, và MỖI request /tool/autocuoc/api/* (kể cả nhận dự đoán) đều phải kèm X-User-Key + X-HWID. Mỗi key chỉ thấy tài khoản LC79 của mình; key hết hạn -> phiên auto cược tự dừng. Chạy gunicorn --workers 1 (xem khối "AUTO CƯỢC LC79")
     GET /api/html                -> panel HTML theo dõi Sun + Hit, đổi qua lại, chọn số ván lịch sử. CHỈ MỞ KHI ADMIN CHÍNH DUYỆT THIẾT BỊ (HWID): máy lạ thấy bảng "Đang chờ admin duyệt", được duyệt thì tự mở, KHÔNG cần key, vào cả Sun + Hit
     GET /api/panel/status        -> panel hỏi trạng thái duyệt của thiết bị này (gửi yêu cầu lần đầu): {"status": "approved" | "pending" | "denied" | "limit"} (xem khối "DUYỆT THIẾT BỊ VÀO PANEL")
     GET /api/admin/panel (+ POST /approve · /deny · /remove · /ban · /unban) -> admin CHÍNH xem + duyệt / từ chối / gỡ quyền / BAN (danh sách đen: chặn cả IP + thiết bị khỏi /api/html, trả 404) thiết bị vào panel (mục "Duyệt thiết bị vào panel HTML" ở trang /api/admin)
-    GET|POST /api/admin/offserver -> OFF SERVER (CHỈ admin chính, nút ở trang /api/admin): bật lên thì server + panel HTML vẫn chạy và cập nhật dự đoán bình thường (thiết bị đã duyệt / admin), còn TOOL NGOÀI gọi API dự đoán nhận 503 {"server_off": true} và không có tín hiệu. POST {"off": true|false}. Lưu file, còn sau restart (xem khối "OFF SERVER")
+    GET|POST /api/admin/offserver -> OFF SERVER THEO TỪNG BÀN / GAME (CHỈ admin chính, tab "Off server" ở /api/admin): tắt bàn nào (Sun · Hit TX Thường · Hit TX MD5 · LC MD5 · LC Hũ) hay cả game (Sun · Hit · LC79) hay tất cả thì CHỈ tool dùng bàn đó nhận 503 {"server_off": true} và không có dự đoán — các bàn khác chạy bình thường; server + panel HTML (thiết bị đã duyệt / admin chính) vẫn cập nhật. POST {"tables":["lcmd5"],"off":true} | {"games":["lc79"],"off":true} | {"all":true,"off":false} (kiểu cũ {"off":true} = tất cả). Endpoint dự đoán LUÔN đòi key admin tạo + kiểm lại ngay trong view (xem khối "OFF SERVER"). Lưu file, còn sau restart
     GET /api/admin/cuocstatus    -> (admin CHÍNH) bảng TOÀN BỘ tài khoản đang / đã dùng auto cược; bấm 1 dòng xem hồ sơ: chiến thuật đã chọn, số dư, tổng lãi/lỗ, thắng/thua, tổng đã cược, log + ván gần nhất; POST /api/admin/cuocstatus/action {id, act: stop|remove}
     GET /health                  -> CÔNG KHAI, chỉ {"ok":true} (healthcheck). Health đầy đủ: GET /api/admin/health (admin chính, header X-Admin-Token)
     GET /api/admin               -> trang quản trị: MỘT ô nhập key, server tự nhận diện admin chính / admin phụ / key người dùng / key không tồn tại — tạo / xóa (tích chọn nhiều key) / xem key, MỌI key gắn HWID thiết bị (1 key dùng được N thiết bị), hiện lần dùng gần nhất, KHÔNG hiện ở trang chủ (xem khối "CONFIG KEY / ADMIN")
@@ -4076,7 +4076,7 @@ function liveTick(){
     else if(st.err){cls='bad';txt='Chưa nhận được dữ liệu'}
     else{cls='idle';txt='Đang kết nối…'}
   }
-  const html=`<i></i><span>${esc(txt)}</span>${off?'<em title="Off server đang BẬT: tool ngoài không nhận được dự đoán, chỉ panel này còn nhận">OFF SERVER</em>':''}`;
+  const html=`<i></i><span>${esc(txt)}</span>${off?'<em title="Bàn này đang OFF SERVER: tool ngoài không nhận được dự đoán của bàn này, chỉ panel đã duyệt còn nhận">OFF SERVER</em>':''}`;
   if(el.className!=='live '+cls)el.className='live '+cls;
   if(LAST.get(el)!==html){LAST.set(el,html);el.innerHTML=html}
   put('#banner',bannerHtml());
@@ -4453,7 +4453,7 @@ def _pub_err(err, dflt):
 
 
 _CORS_EXACT = {"/", "/health", "/api/key/check", "/api/predictsun", "/api/predict", "/api/predicthittxthuong", "/api/predicthittxmd5",
-               "/api/predictlcmd5", "/api/predictlchu", "/api/predicttele68txmd5"}
+               "/api/predictlcmd5", "/api/predictlchu", "/api/predicttele68txmd5", "/api/notice"}
 _NOFRAME_PREFIX = ("/api/admin", "/tool/autocuoc", "/api/autocuoc", "/autocuoc")
 
 
@@ -4634,7 +4634,7 @@ def _track_ip():
 #   SUNVIW_MAIN_PASS   (KHUYẾN NGHỊ) mật khẩu admin chính đặt ở biến môi trường Railway -> trong code không còn dấu vết mật khẩu nào. Không đặt = dùng hash mặc định trong code.
 #   SUNVIW_KEYS_PATH   file lưu key (mặc định <DATA_DIR>/sunviw_keys.json; DATA_DIR = Volume Railway nếu có, không thì /tmp). Railway: PHẢI gắn Volume, không thì MẤT KEY mỗi lần deploy.
 #   SUNVIW_SECRET      (tuỳ chọn) khoá ký phiên đăng nhập admin; không đặt = tự sinh và lưu chung file key.
-#   SUNVIW_GATE_API    1 = bắt buộc key cho các endpoint ở trên (mặc định) · 0 = tắt (ai gọi API cũng được như trước)
+#   SUNVIW_GATE_API    1 = bắt buộc key cho các endpoint ở trên (mặc định) · 0 = chỉ nới các endpoint PHỤ (/api/notice ...). Endpoint DỰ ĐOÁN (/api/predict*) LUÔN đòi key admin tạo, không tắt được.
 #   SUNVIW_KEY_START_ON_ACTIVATE  1 = (mặc định) key mới tạo CHƯA tính hạn: hạn chỉ chạy từ lần dùng THÀNH CÔNG đầu tiên (key người dùng: lần gọi hợp lệ đầu tiên đúng game + gắn được thiết bị · key admin phụ: lần đăng nhập đầu tiên). 0 = tính hạn từ lúc tạo như cũ. Key tạo TRƯỚC bản này giữ nguyên hạn cũ.
 #   SUNVIW_HWID_REQUIRED  1 = request dùng key người dùng mà KHÔNG kèm HWID bị từ chối (mặc định) · 0 = cho qua (không gắn thiết bị). Có gửi HWID thì luôn được kiểm tra + gắn thiết bị.
 ADMIN_MAIN_NAME = "admin chính"
@@ -4964,6 +4964,10 @@ def _path_game(p):
         return "hit"
     if p in ("/api/predictlcmd5", "/api/predictlchu", "/api/predicttele68txmd5"):
         return "lc79"
+    if p == "/api/notice":                                 # thông báo: game lấy từ ?game= (danh sách trắng) -> key game khác bị 403, KHÔNG đọc được thông báo game khác
+        g = (request.args.get("game") or "").strip().lower()
+        g = "lc79" if g == "tele68" else g
+        return g if g in NOTICE_GAMES else None
     return None
 
 
@@ -5431,85 +5435,245 @@ def api_panel_status():
     return _json({"ok": st == "approved", "status": st, "loi": _PANEL_MSG.get(st, "")}, 429 if st == "limit" else 200)
 
 
-_GATED_EXACT = {"/api/predictsun", "/api/predict", "/api/predicthittxthuong", "/api/predicthittxmd5", "/api/predictlcmd5", "/api/predictlchu", "/api/predicttele68txmd5", "/api/ips", "/api/history/clear", "/api/history/regrade", "/api/history/wipe"}
+_GATED_EXACT = {"/api/notice", "/api/predictsun", "/api/predict", "/api/predicthittxthuong", "/api/predicthittxmd5", "/api/predictlcmd5", "/api/predictlchu", "/api/predicttele68txmd5", "/api/ips", "/api/history/clear", "/api/history/regrade", "/api/history/wipe"}
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-#  🔌  OFF SERVER (công tắc ở trang /api/admin, CHỈ ADMIN CHÍNH bật/tắt)  —  CHỈNH Ở ĐÂY
+#  🔌  OFF SERVER THEO TỪNG BÀN / GAME (tab "Off server" ở /api/admin, CHỈ ADMIN CHÍNH bật/tắt)  —  CHỈNH Ở ĐÂY
 # ═══════════════════════════════════════════════════════════════════════════
-#   Bật OFF SERVER:  server VẪN chạy bình thường (poller quét API, 13 logic / WR / AF / lưu ván đã chấm không đổi) và panel HTML /api/html VẪN cập nhật dự đoán như thường,
-#   NHƯNG các endpoint DỰ ĐOÁN (/api/predictsun · /api/predict · /api/predicthittxthuong · /api/predicthittxmd5 · /api/predictlcmd5 · /api/predictlchu · /api/predicttele68txmd5 [alias cũ])
-#   chỉ trả dữ liệu cho thiết bị ĐÃ ĐƯỢC ADMIN CHÍNH DUYỆT vào panel (mục "Duyệt thiết bị vào panel HTML") và request đó KHÔNG gửi key (panel không bao giờ gửi key).
-#   Admin muốn xem JSON / panel khi off: duyệt thiết bị của mình ở mục đó như mọi thiết bị khác.
-#   Mọi tool ngoài (gọi bằng key người dùng, kể cả máy lạ / không HWID, kể cả tool chạy trên máy đã duyệt nhưng có gửi key) nhận HTTP 503 {"ok": false, "server_off": true, "loi": OFFSRV_MSG} -> KHÔNG nhận được dự đoán.
-#   Request tool bị chặn TRƯỚC khi kiểm key -> không kích hoạt key / không gắn thiết bị / không tính vào "lần dùng gần nhất". Hạn key đã kích hoạt vẫn chạy bình thường trong lúc off.
+#   Mỗi bàn có công tắc RIÊNG:  sun · hittxthuong (Hit · TX Thường) · hittxmd5 (Hit · TX MD5) · lcmd5 (LC · MD5) · lchu (LC · Hũ)
+#   Có nút nhóm theo game (Sun · Hit · LC79) và nút TẤT CẢ. Tắt bàn nào thì CHỈ tool dùng bàn đó không lấy được dự đoán, các bàn còn lại chạy bình thường.
+#   Bàn OFF: server VẪN chạy (poller quét API, 13 logic / WR / AF / lưu ván đã chấm không đổi) và panel HTML /api/html VẪN cập nhật dự đoán của bàn đó như thường,
+#   NHƯNG endpoint dự đoán của bàn đó chỉ trả dữ liệu cho thiết bị ĐÃ ĐƯỢC ADMIN CHÍNH DUYỆT vào panel (và request đó KHÔNG gửi key) hoặc phiên admin chính.
+#   Mọi tool ngoài (key người dùng, kể cả máy lạ / không HWID, kể cả tool chạy trên máy đã duyệt nhưng có gửi key) nhận HTTP 503 {"ok": false, "server_off": true, "loi": ...} -> KHÔNG có dự đoán.
+#   Request tool bị chặn TRƯỚC khi kiểm key -> không kích hoạt key / không gắn thiết bị / không tính "lần dùng gần nhất". Hạn key đã kích hoạt vẫn chạy bình thường trong lúc off.
+#   Auto cược LC: bàn nguồn (AB_FEED_KEY = lcmd5) OFF -> auto cược KHÔNG nhận dự đoán mới => không đặt cược mới (ván đang mở vẫn được chấm), tự chạy lại khi bật server.
 #   Không chặn: /api/panel/status · /api/html · /api/key/check · /health · /api/admin* (nên vẫn bật lại được).
-#   Trạng thái lưu trong file riêng (OFFSRV_PATH, nằm cùng Volume) -> còn nguyên sau restart / deploy, đồng bộ giữa nhiều worker gunicorn (đọc theo mtime file, cache).
-#   OFFSRV_DEFAULT  trạng thái khi CHƯA có file (env SUNVIW_OFFSRV=1 -> khởi động ở chế độ off server) · OFFSRV_PATH (env SUNVIW_OFFSRV_PATH) · OFFSRV_MSG thông báo tool nhận được.
-#   Endpoint: GET /api/admin/offserver (xem) · POST /api/admin/offserver {"off": true|false} (bật / tắt) — cần phiên admin CHÍNH.
+#   🔒 CHỐNG BYPASS (nhiều lớp, lớp nào hỏng thì lớp sau vẫn chặn):
+#      1) _gate_offserver  (before_request)  — bàn OFF -> 503 cho mọi request không phải admin chính / panel đã duyệt.
+#      2) _gate_key        (before_request)  — endpoint dự đoán LUÔN đòi key admin tạo (kể cả khi SUNVIW_GATE_API=0) + đúng game + HWID.
+#      3) _view_guard      (NGAY TRONG view) — kiểm lại key đã được xác thực + đúng bàn + bàn không OFF, KHÔNG dựa vào before_request: nếu ai đó lỡ xoá / đổi thứ tự cổng thì view vẫn từ chối.
+#      4) _security_selfcheck lúc khởi động — route nào bắt đầu bằng /api/predict mà chưa nằm trong bảng bàn / cổng key thì tự vá vào cổng key và báo lỗi ở /api/admin/health.
+#      5) Danh sách trắng đầu ra (_tool_view): tool khách không bao giờ nhận chi_tiet / AF / vùng bẻ / chế độ / phiếu logic / WR / lỗi upstream / config.
+#   Trạng thái lưu trong file riêng (OFFSRV_PATH, cùng Volume) -> còn nguyên sau restart / deploy, đồng bộ giữa nhiều worker (đọc theo mtime+inode, cache). File hỏng -> giữ trạng thái hợp lệ gần nhất.
+#   Định dạng file v2: {"v": 2, "tables": {"lcmd5": {"off": true, "at": epoch, "by": "admin chính"}, ...}} · file cũ {"off": true} (1 công tắc chung) vẫn đọc được: off cũ = TẤT CẢ bàn off.
+#   Môi trường: SUNVIW_OFFSRV=1 -> khởi động (khi chưa có file) với TẤT CẢ bàn off · SUNVIW_OFFSRV_TABLES=lcmd5,hit -> chỉ các bàn / game này off (nhận tên bàn, hoặc game sun|hit|lc79) · SUNVIW_OFFSRV_PATH.
+#   Endpoint: GET /api/admin/offserver (xem) · POST /api/admin/offserver {"tables":["lcmd5"],"off":true} | {"games":["lc79"],"off":true} | {"all":true,"off":false} | {"off":true} (cũ = tất cả) — cần phiên admin CHÍNH.
 OFFSRV_PATH = os.environ.get("SUNVIW_OFFSRV_PATH", _data_path("sunviw_offserver.json"))
-OFFSRV_DEFAULT = _env_bool("SUNVIW_OFFSRV", False)
-OFFSRV_MSG = "Server đang OFF — tạm ngừng cấp dự đoán cho tool. Vui lòng thử lại sau."
-OFFSRV_PATHS = {"/api/predictsun", "/api/predict", "/api/predicthittxthuong", "/api/predicthittxmd5", "/api/predictlcmd5", "/api/predictlchu", "/api/predicttele68txmd5"}
-_os_lock = threading.Lock()
-_os_cache = {"sig": None, "d": None}                   # cache theo (mtime, size) của file -> mỗi request chỉ tốn 1 lần os.stat
+OFFSRV_TABLES = ("sun", "hittxthuong", "hittxmd5", "lcmd5", "lchu")
+OFFSRV_LABEL = {"sun": "Sun", "hittxthuong": "Hit · TX Thường", "hittxmd5": "Hit · TX MD5", "lcmd5": "LC · MD5", "lchu": "LC · Hũ"}
+OFFSRV_GAME_TABLES = {"sun": ("sun",), "hit": ("hittxthuong", "hittxmd5"), "lc79": ("lcmd5", "lchu")}
+OFFSRV_GAME_LABEL = {"sun": "Sun", "hit": "Hitclub", "lc79": "LC79"}
+OFFSRV_GAME_ALIAS = {"hitclub": "hit", "lc": "lc79", "tele68": "lc79"}
+OFFSRV_TABLE_ALIAS = {"tele68txmd5": "lcmd5"}
+OFFSRV_PATH_TABLE = {"/api/predictsun": "sun", "/api/predict": "sun",
+                     "/api/predicthittxthuong": "hittxthuong", "/api/predicthittxmd5": "hittxmd5",
+                     "/api/predictlcmd5": "lcmd5", "/api/predicttele68txmd5": "lcmd5", "/api/predictlchu": "lchu"}
+OFFSRV_PATHS = frozenset(OFFSRV_PATH_TABLE)
+OFFSRV_MSG = "đang OFF — tạm ngừng cấp dự đoán cho tool. Vui lòng thử lại sau."
+
+
+def _offsrv_msg(tk):
+    return f"Server {OFFSRV_LABEL.get(tk, '')} {OFFSRV_MSG}".replace("  ", " ")
+
+
+def _offsrv_norm_table(x):
+    x = str(x or "").strip().lower()
+    x = OFFSRV_TABLE_ALIAS.get(x, x)
+    return x if x in OFFSRV_TABLES else None
+
+
+def _offsrv_norm_game(x):
+    x = str(x or "").strip().lower()
+    x = OFFSRV_GAME_ALIAS.get(x, x)
+    return x if x in OFFSRV_GAME_TABLES else None
+
+
+def _offsrv_env_default():
+    """Tập bàn OFF khi CHƯA có file: SUNVIW_OFFSRV=1 -> tất cả · SUNVIW_OFFSRV_TABLES=lcmd5,hit,... -> các bàn / game liệt kê."""
+    if _env_bool("SUNVIW_OFFSRV", False):
+        return frozenset(OFFSRV_TABLES)
+    out = set()
+    for x in os.environ.get("SUNVIW_OFFSRV_TABLES", "").replace(";", ",").split(","):
+        t, g = _offsrv_norm_table(x), _offsrv_norm_game(x)
+        if t:
+            out.add(t)
+        elif g:
+            out.update(OFFSRV_GAME_TABLES[g])
+    return frozenset(out)
+
+
+OFFSRV_DEFAULT_TABLES = _offsrv_env_default()
+OFFSRV_DEFAULT = bool(OFFSRV_DEFAULT_TABLES)            # giữ tên cũ (có bàn nào mặc định off không)
+_os_lock = threading.Lock()                              # bảo vệ cache
+_os_wlock = threading.Lock()                             # tuần tự hoá đọc-sửa-ghi file
+_os_cache = {"sig": None, "t": None, "good": None}       # cache theo (mtime, size, inode) của file -> mỗi request chỉ tốn 1 lần os.stat
+
+
+def _offsrv_defaults():
+    return {k: {"off": k in OFFSRV_DEFAULT_TABLES, "at": None, "by": None} for k in OFFSRV_TABLES}
+
+
+def _offsrv_parse(o):
+    """Nội dung file -> {bàn: {"off","at","by"}}. Hiểu v2 {"tables": {...}} và file cũ {"off": bool} (off cũ = TẤT CẢ bàn). Sai cấu trúc -> ném ValueError."""
+    if not isinstance(o, dict):
+        raise ValueError("offserver: file khong phai object")
+    t = _offsrv_defaults()
+
+    def _meta(e):
+        at = e.get("at")
+        return (int(at) if isinstance(at, (int, float)) and not isinstance(at, bool) else None), (str(e.get("by") or "")[:40] or None)
+
+    if isinstance(o.get("tables"), dict):
+        for k in OFFSRV_TABLES:
+            e = o["tables"].get(k)
+            if isinstance(e, dict):
+                at, by = _meta(e)
+                t[k] = {"off": bool(e.get("off")), "at": at, "by": by}
+    elif "off" in o:
+        at, by = _meta(o)
+        for k in OFFSRV_TABLES:
+            t[k] = {"off": bool(o.get("off")), "at": at, "by": by}
+    else:
+        raise ValueError("offserver: file khong co tables / off")
+    return t
+
+
+def _offsrv_read_file():
+    """Đọc thẳng file (không cache). Thiếu file -> None; hỏng -> ném."""
+    try:
+        with open(OFFSRV_PATH, "r", encoding="utf-8") as f:
+            return _offsrv_parse(json.load(f))
+    except FileNotFoundError:
+        return None
+
+
+def _offsrv_tables():
+    """{bàn: {"off","at","by"}} (KHÔNG sửa đối tượng trả về — đang dùng chung với cache). Chưa có file -> mặc định; file hỏng -> trạng thái hợp lệ gần nhất."""
+    try:
+        stt = os.stat(OFFSRV_PATH)
+        sig = (stt.st_mtime_ns, stt.st_size, stt.st_ino)
+    except OSError:
+        return _offsrv_defaults()
+    with _os_lock:
+        if _os_cache["sig"] == sig and _os_cache["t"] is not None:
+            return _os_cache["t"]
+        good = _os_cache["good"]
+    try:
+        t = _offsrv_read_file()
+    except Exception:  # noqa: BLE001
+        return good if good is not None else _offsrv_defaults()
+    if t is None:
+        return _offsrv_defaults()
+    with _os_lock:
+        _os_cache.update(sig=sig, t=t, good=t)
+    return t
+
+
+def offsrv_table_off(key):
+    """Bàn `key` đang OFF SERVER không (khoá lạ -> False)."""
+    return bool(_offsrv_tables().get(key, {}).get("off"))
 
 
 def offsrv_state():
-    """{"off": bool, "at": epoch|None, "by": str|None}. Chưa có file / file hỏng -> OFFSRV_DEFAULT."""
-    dflt = {"off": OFFSRV_DEFAULT, "at": None, "by": None}
-    try:
-        stt = os.stat(OFFSRV_PATH)
-        sig = (stt.st_mtime_ns, stt.st_size)
-    except OSError:
-        return dflt
-    with _os_lock:
-        if _os_cache["sig"] == sig and _os_cache["d"] is not None:
-            return _os_cache["d"]
-    try:
-        with open(OFFSRV_PATH, "r", encoding="utf-8") as f:
-            o = json.load(f)
-        d = {"off": bool(o.get("off")), "at": o.get("at"), "by": o.get("by")}
-    except Exception:  # noqa: BLE001
-        return dflt
-    with _os_lock:
-        _os_cache.update(sig=sig, d=d)
-    return d
+    """Tổng hợp: {"tables": {...}, "off": TẤT CẢ bàn đang off, "any": có bàn nào off, "off_list": [...]}."""
+    t = _offsrv_tables()
+    offs = [k for k in OFFSRV_TABLES if t[k]["off"]]
+    return {"tables": t, "off": len(offs) == len(OFFSRV_TABLES), "any": bool(offs), "off_list": offs}
+
+
+def offsrv_set_tables(keys, off, by):
+    """Bật / tắt OFF SERVER cho các bàn `keys` (chỉ đổi đúng các bàn đó, ghi nguyên tử). Ném OSError nếu không ghi được. Trả {bàn: {...}}."""
+    keys = [k for k in OFFSRV_TABLES if k in set(keys)]
+    now, off = int(time.time()), bool(off)
+    with _os_wlock:
+        try:
+            base = _offsrv_read_file()
+        except Exception:  # noqa: BLE001
+            base = None
+        t = {k: dict(v) for k, v in (base or _offsrv_defaults()).items()}
+        for k in keys:
+            if t[k]["off"] != off or t[k]["at"] is None:
+                t[k] = {"off": off, "at": now, "by": str(by or "")[:40] or None}
+        tmp = OFFSRV_PATH + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump({"v": 2, "tables": t}, f, ensure_ascii=False)
+        os.replace(tmp, OFFSRV_PATH)
+        with _os_lock:
+            _os_cache.update(sig=None, t=None, good=t)           # bỏ cache -> lần đọc sau lấy đúng file mới
+    return t
 
 
 def offsrv_set(off, by):
-    """Ghi trạng thái off server (atomic). Ném OSError nếu không ghi được."""
-    d = {"off": bool(off), "at": int(time.time()), "by": str(by or "")}
-    tmp = OFFSRV_PATH + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(d, f, ensure_ascii=False)
-    os.replace(tmp, OFFSRV_PATH)
-    with _os_lock:
-        _os_cache.update(sig=None, d=None)              # bỏ cache -> lần đọc sau lấy đúng file mới
-    return d
+    """(giữ tên cũ) bật / tắt TẤT CẢ bàn."""
+    return offsrv_set_tables(OFFSRV_TABLES, off, by)
+
+
+def _offsrv_view():
+    t = _offsrv_tables()
+    rows = [{"key": k, "ten": OFFSRV_LABEL[k], "game": next(g for g, ks in OFFSRV_GAME_TABLES.items() if k in ks),
+             "off": t[k]["off"], "luc": t[k]["at"], "boi": t[k]["by"]} for k in OFFSRV_TABLES]
+    games = []
+    for g, ks in OFFSRV_GAME_TABLES.items():
+        n = sum(1 for k in ks if t[k]["off"])
+        games.append({"key": g, "ten": OFFSRV_GAME_LABEL[g], "tables": list(ks), "off": n == len(ks), "mot_phan": 0 < n < len(ks)})
+    n_off = sum(1 for r in rows if r["off"])
+    last = max((r for r in rows if r["off"] and r["luc"]), key=lambda r: r["luc"], default=None)
+    return {"ok": True, "off": n_off == len(rows), "any": n_off > 0, "n_off": n_off, "tables": rows, "games": games,
+            "luc": last["luc"] if last else None, "boi": last["boi"] if last else None}
+
+
+def _offsrv_pass():
+    """Request này được lấy dự đoán của bàn đang OFF không: admin CHÍNH (phiên ký) hoặc thiết bị panel đã duyệt VÀ không gửi key (panel không bao giờ gửi key)."""
+    if request.headers.get("X-Admin-Token"):
+        _s = _tok_check()
+        if _s and _s["r"] == "main":
+            return True
+    if request.headers.get("X-User-Key") or request.args.get("key", ""):
+        return False
+    hw, alts, hfresh = req_hw_ids()
+    return bool(hw and _panel_approved(hw, alts, hfresh, client_ip(), request.headers.get("User-Agent", "")))
+
+
+def _offsrv_block(tk):
+    r = _json({"ok": False, "server_off": True, "loi": _offsrv_msg(tk)}, 503)
+    r.headers["Retry-After"] = "30"
+    return r
 
 
 @app.before_request
 def _gate_offserver():
-    """OFF SERVER bật -> chỉ panel (thiết bị admin chính đã duyệt vào panel, request KHÔNG gửi key) nhận được dự đoán; tool ngoài nhận 503. Chạy TRƯỚC _gate_key."""
-    if request.method == "OPTIONS" or request.path not in OFFSRV_PATHS:
+    """Bàn của endpoint đang OFF SERVER -> chỉ panel (thiết bị admin chính đã duyệt, request KHÔNG gửi key) / admin chính nhận được dự đoán; tool ngoài nhận 503. Chạy TRƯỚC _gate_key."""
+    if request.method == "OPTIONS":
         return None
-    if not offsrv_state()["off"]:
+    tk = OFFSRV_PATH_TABLE.get(request.path)
+    if tk is None or not offsrv_table_off(tk):
         return None
-    if request.headers.get("X-Admin-Token"):
-        _s = _tok_check()
-        if _s and _s["r"] == "main":
-            return None
-    k = request.headers.get("X-User-Key") or request.args.get("key", "")
-    hw, alts, hfresh = req_hw_ids()
-    if not k and hw and _panel_approved(hw, alts, hfresh, client_ip(), request.headers.get("User-Agent", "")):
-        return None                                                            # panel của thiết bị đã duyệt (panel không bao giờ gửi key)
-    return _json({"ok": False, "server_off": True, "loi": OFFSRV_MSG}, 503)
+    if not _rate_ok(f"off:{client_ip()}", RATE_IP):                # dội vào endpoint đang off: vẫn bị giới hạn tốc độ
+        return _too_many()
+    if _offsrv_pass():
+        flask_g.off_ok = True                                       # view_guard đọc cờ này: không có cờ mà bàn đang off -> view tự từ chối
+        return None
+    return _offsrv_block(tk)
+
+
+def _view_guard(tk):
+    """LỚP PHÒNG THỦ NẰM TRONG VIEW (gọi đầu mỗi endpoint dự đoán): không dựa vào before_request. Trả Response nếu phải chặn, None nếu được qua.
+    Chặn khi: (a) chưa qua cổng key / panel · (b) key không thuộc game của bàn này · (c) bàn đang OFF mà request chưa được _gate_offserver cho qua."""
+    panel = _is_panel()
+    if not panel and not getattr(flask_g, "key_ok", False):
+        return _json({"ok": False, "can_key": True, "loi": "thieu key"}, 401)
+    if tk not in _key_tables(getattr(flask_g, "key_game", "")):
+        return _json({"ok": False, "sai_game": True, "loi": "key khong thuoc game nay"}, 403)
+    if offsrv_table_off(tk) and not getattr(flask_g, "off_ok", False):
+        return _offsrv_block(tk)
+    return None
 
 
 @app.route("/api/admin/offserver", methods=["GET", "POST"])
 def api_admin_offserver():
-    """Xem / bật / tắt OFF SERVER. CHỈ admin chính. POST {"off": true|false}."""
+    """Xem / bật / tắt OFF SERVER theo bàn. CHỈ admin chính.
+    POST {"off": true|false} + chọn phạm vi: "tables": ["lcmd5", ...] · "games": ["sun"|"hit"|"lc79", ...] · "all": true. Không chọn phạm vi (kiểu cũ {"off": true}) = tất cả bàn."""
     s, err = _need_admin()
     if err:
         return err
@@ -5518,14 +5682,250 @@ def api_admin_offserver():
     if request.method == "POST":
         b = request.get_json(silent=True) or {}
         if not isinstance(b.get("off"), bool):
-            return _json({"ok": False, "loi": 'can {"off": true|false}'}, 400)
+            return _json({"ok": False, "loi": 'can {"off": true|false} (+ "tables": [...] | "games": [...] | "all": true)'}, 400)
+        keys = set()
+        if b.get("all") is True:
+            keys.update(OFFSRV_TABLES)
+        for fld, norm, expand in (("tables", _offsrv_norm_table, lambda v: (v,)), ("games", _offsrv_norm_game, lambda v: OFFSRV_GAME_TABLES[v])):
+            vals = b.get(fld)
+            if vals is None:
+                continue
+            if not isinstance(vals, list) or not vals or len(vals) > 16 or any(not isinstance(x, str) for x in vals):
+                return _json({"ok": False, "loi": f'"{fld}" phai la danh sach khong rong cac chuoi'}, 400)
+            for x in vals:
+                v = norm(x)
+                if v is None:
+                    return _json({"ok": False, "loi": f'"{fld}" co gia tri khong hop le'}, 400)
+                keys.update(expand(v))
+        if not keys:
+            if any(f in b for f in ("all", "tables", "games")):
+                return _json({"ok": False, "loi": "chua chon ban / game nao"}, 400)
+            keys.update(OFFSRV_TABLES)                              # kiểu cũ {"off": bool} = tất cả
         try:
-            d = offsrv_set(b["off"], s["n"])
+            offsrv_set_tables(keys, b["off"], s["n"])
         except OSError as e:
             return _json({"ok": False, "loi": f"khong ghi duoc file off server: {e}"}, 500)
-    else:
-        d = offsrv_state()
-    return _json({"ok": True, "off": d["off"], "luc": d["at"], "boi": d["by"]})
+        _audit("offserver_set", by=s["n"], off=b["off"], tables=sorted(keys))
+    return _json(_offsrv_view())
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  📢  THÔNG BÁO TỚI TOOL (tab "Thông báo" ở /api/admin, CHỈ ADMIN CHÍNH dùng được)  —  CHỈNH Ở ĐÂY
+# ═══════════════════════════════════════════════════════════════════════════
+#   Admin chính chọn: game nhận (Sun · Hit · LC79, hoặc TẤT CẢ game = mọi tool HTML; KHÔNG áp dụng cho Auto cược LC) · nội dung · cỡ chữ · VỊ TRÍ chữ trên màn hình tool (kéo thả trên giao diện mô phỏng) · thời gian giữ.
+#   Tool của game đó (file HTML) hỏi GET /api/notice?game=<game> mỗi vài giây: có thông báo -> hiện "📢 Có thông báo từ Admin" rồi hiện chữ đúng vị trí, tự biến mất khi hết hạn / bị gỡ.
+#   🔒 BẢO MẬT — vì sao không ai gửi lén được:
+#      · GỬI / GỠ chỉ qua POST /api/admin/notice/send · /api/admin/notice/delete và PHẢI có phiên admin CHÍNH: token + chữ ký HMAC theo từng request (X-Ts / X-Nonce / X-Sig, nonce dùng 1 lần, gắn User-Agent).
+#        Admin phụ -> 403 · key người dùng / thiết bị panel đã duyệt / không đăng nhập -> 401 (không có đường nào khác để ghi). Có nhật ký audit (notice_send / notice_delete / notice_denied).
+#      · /api/notice (tool đọc) CHỈ ĐỌC, qua cổng _gate_key: cần key hợp lệ ĐÚNG GAME + HWID (hoặc admin chính / thiết bị panel đã duyệt) — tool không có tham số nào để ghi, `game` chỉ nhận danh sách trắng.
+#      · Server làm sạch nội dung (bỏ ký tự điều khiển / đảo chiều chữ, giới hạn độ dài + số dòng), kiểm tra mọi con số; tool đặt chữ bằng textContent nên không chạy được HTML / JS.
+#      · Trần số thông báo đang chạy cùng lúc + giới hạn tốc độ gửi. File lưu NOTICE_PATH (cùng Volume), ghi nguyên tử, file hỏng -> coi như không có thông báo (không chặn tool).
+#   NOTICE_PATH (env SUNVIW_NOTICE_PATH) · NOTICE_TEXT_MAX · NOTICE_LINES_MAX · NOTICE_SIZE_* (cỡ chữ px) · NOTICE_DUR_MIN / NOTICE_DUR_MAX (giây) · NOTICE_MAX_ACTIVE · NOTICE_SEND_RATE (lần / phút)
+#   Endpoint: GET /api/admin/notice (xem + cấu hình) · POST /api/admin/notice/send {games, text, x, y, size, dur} · POST /api/admin/notice/delete {id} hoặc {all: true} — đều cần admin CHÍNH.
+NOTICE_PATH = os.environ.get("SUNVIW_NOTICE_PATH", _data_path("sunviw_notice.json"))
+NOTICE_GAMES = tuple(g for g in KEY_GAMES if g != "autolc")   # game nhận được thông báo = các tool HTML (Sun · Hit · LC79); Auto cược LC không dùng
+NOTICE_TEXT_MAX = 300
+NOTICE_LINES_MAX = 6
+NOTICE_SIZE_MIN, NOTICE_SIZE_MAX, NOTICE_SIZE_DEFAULT = 12, 96, 28
+NOTICE_DUR_MIN = 5                                       # giây
+NOTICE_DUR_MAX = 30 * 86400
+NOTICE_MAX_ACTIVE = 20
+NOTICE_SEND_RATE = _env_num("SUNVIW_NOTICE_RATE", 20, int)
+_NT_ID_RE = re.compile(r"[0-9a-f]{12}")
+_nt_lock = threading.RLock()
+_nt_cache = {"sig": None, "items": None}                 # cache theo (mtime, size) của file -> mỗi request chỉ tốn 1 lần os.stat
+
+
+def _nt_clean_text(s):
+    """Làm sạch nội dung: chuẩn hóa Unicode, bỏ ký tự điều khiển / ký tự đảo chiều chữ (giữ xuống dòng + ZWJ của emoji), cắt khoảng trắng đầu / cuối từng dòng."""
+    if not isinstance(s, str):
+        return ""
+    s = unicodedata.normalize("NFC", s).replace("\r\n", "\n").replace("\r", "\n")
+    s = "".join(ch for ch in s if ch in ("\n", "\u200d") or unicodedata.category(ch)[0] != "C")
+    s = "\n".join(ln.strip() for ln in s.split("\n")).strip()
+    return re.sub(r"\n{3,}", "\n\n", s)
+
+
+def _nt_num(v, lo, hi, clamp=False):
+    """Số hợp lệ trong [lo, hi] (bool / NaN / chuỗi -> None). clamp=True: kẹp vào khoảng; ngược lại ngoài khoảng -> None."""
+    if isinstance(v, bool) or not isinstance(v, (int, float)) or v != v or v in (float("inf"), float("-inf")):
+        return None
+    if clamp:
+        return min(hi, max(lo, v))
+    return v if lo <= v <= hi else None
+
+
+def _nt_norm_item(it):
+    """Kiểm tra 1 thông báo đọc từ file; sai cấu trúc -> None (bỏ qua, không làm hỏng các thông báo khác)."""
+    try:
+        if not isinstance(it, dict) or not isinstance(it.get("id"), str) or not _NT_ID_RE.fullmatch(it["id"]):
+            return None
+        text = _nt_clean_text(it.get("text"))
+        games = it.get("games")
+        if not text or len(text) > NOTICE_TEXT_MAX or not isinstance(games, list) or not games:
+            return None
+        games = [g for g in games if g == "all" or g in NOTICE_GAMES]
+        x, y = _nt_num(it.get("x"), 0, 100, True), _nt_num(it.get("y"), 0, 100, True)
+        size, t, exp = _nt_num(it.get("size"), NOTICE_SIZE_MIN, NOTICE_SIZE_MAX, True), _nt_num(it.get("t"), 0, 4e9), _nt_num(it.get("exp"), 0, 4e9)
+        if not games or None in (x, y, size, t, exp):
+            return None
+        return {"id": it["id"], "text": text, "games": ["all"] if "all" in games else games, "x": round(float(x), 2), "y": round(float(y), 2),
+                "size": int(size), "t": int(t), "exp": int(exp), "by": str(it.get("by") or "")[:40]}
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _nt_read(force=False):
+    """Danh sách thông báo (cả đã hết hạn nếu chưa bị dọn). File thiếu / hỏng -> []."""
+    with _nt_lock:
+        try:
+            stt = os.stat(NOTICE_PATH)
+            sig = (stt.st_mtime_ns, stt.st_size)
+        except OSError:
+            _nt_cache.update(sig=None, items=[])
+            return []
+        if not force and _nt_cache["sig"] == sig and _nt_cache["items"] is not None:
+            return _nt_cache["items"]
+        items = []
+        try:
+            with open(NOTICE_PATH, "r", encoding="utf-8") as f:
+                o = json.load(f)
+            for raw in (o.get("items") if isinstance(o, dict) else None) or []:
+                it = _nt_norm_item(raw)
+                if it:
+                    items.append(it)
+        except Exception:  # noqa: BLE001
+            items = []
+        _nt_cache.update(sig=sig, items=items)
+        return items
+
+
+def _nt_write(items):
+    """Ghi nguyên tử (file tạm rồi đổi tên). Ném OSError nếu không ghi được."""
+    tmp = NOTICE_PATH + ".tmp"
+    with _nt_lock:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump({"v": 1, "items": items}, f, ensure_ascii=False)
+        os.replace(tmp, NOTICE_PATH)
+        _nt_cache.update(sig=None, items=None)
+
+
+def _nt_active(now):
+    return [it for it in _nt_read() if it["exp"] > now]
+
+
+def _nt_need_main():
+    """Chỉ admin CHÍNH (phiên hợp lệ + chữ ký request). Trả (session, None) hoặc (None, response lỗi)."""
+    s, err = _need_admin()
+    if err:
+        return None, err
+    if s["r"] != "main":
+        _audit("notice_denied", role=s["r"])
+        return None, _json({"ok": False, "loi": "chi admin chinh moi dung duoc thong bao"}, 403)
+    return s, None
+
+
+@app.route("/api/notice")
+def api_notice():
+    """Tool đọc thông báo (CHỈ ĐỌC). Cổng _gate_key đã bắt buộc key hợp lệ đúng game + HWID (hoặc admin chính / thiết bị panel đã duyệt)."""
+    g = _path_game("/api/notice")                         # ?game= đã qua danh sách trắng (và đã khớp game của key ở _gate_key)
+    if g is None:
+        kg = getattr(flask_g, "key_game", None)
+        g = kg if kg in NOTICE_GAMES else None
+    now = time.time()
+    out = [] if g is None else [{"id": it["id"], "text": it["text"], "x": it["x"], "y": it["y"], "size": it["size"], "con_lai": max(0, int(it["exp"] - now))}
+                                for it in _nt_active(now) if "all" in it["games"] or g in it["games"]]
+    return _json({"ok": True, "items": out})
+
+
+@app.route("/api/admin/notice")
+def api_admin_notice():
+    """Danh sách thông báo đang chạy + cấu hình giới hạn cho form. CHỈ admin chính."""
+    s, err = _nt_need_main()
+    if err:
+        return err
+    now = time.time()
+    items = sorted(_nt_active(now), key=lambda it: -it["t"])
+    return _json({"ok": True, "now": int(now),
+                  "items": [dict(it, con_lai=max(0, int(it["exp"] - now))) for it in items],
+                  "cfg": {"games": [{"id": g, "ten": KEY_GAME_LABEL.get(g, g)} for g in NOTICE_GAMES], "text_max": NOTICE_TEXT_MAX, "lines_max": NOTICE_LINES_MAX,
+                          "size": [NOTICE_SIZE_MIN, NOTICE_SIZE_MAX, NOTICE_SIZE_DEFAULT], "dur": [NOTICE_DUR_MIN, NOTICE_DUR_MAX], "max_active": NOTICE_MAX_ACTIVE}})
+
+
+@app.route("/api/admin/notice/send", methods=["POST"])
+def api_admin_notice_send():
+    """Gửi thông báo mới. CHỈ admin chính. Body: {"games": ["lc79", ...] | ["all"], "text": "...", "x": 0-100, "y": 0-100, "size": px, "dur": giây}."""
+    s, err = _nt_need_main()
+    if err:
+        return err
+    if not _rate_ok(f"ntsend:{s['sh']}", NOTICE_SEND_RATE):
+        return _too_many()
+    b = request.get_json(silent=True)
+    if not isinstance(b, dict):
+        return _json({"ok": False, "loi": "du lieu gui len khong hop le"}, 400)
+    text = _nt_clean_text(b.get("text"))
+    if not text:
+        return _json({"ok": False, "loi": "chua nhap noi dung thong bao"}, 400)
+    if len(text) > NOTICE_TEXT_MAX or text.count("\n") + 1 > NOTICE_LINES_MAX:
+        return _json({"ok": False, "loi": f"noi dung toi da {NOTICE_TEXT_MAX} ky tu / {NOTICE_LINES_MAX} dong"}, 400)
+    raw = b.get("games")
+    if not isinstance(raw, list) or not raw or len(raw) > len(NOTICE_GAMES) + 1:
+        return _json({"ok": False, "loi": "chua chon game nhan thong bao"}, 400)
+    games = []
+    for g in raw:
+        g = g.strip().lower() if isinstance(g, str) else ""
+        if g != "all" and g not in NOTICE_GAMES:
+            return _json({"ok": False, "loi": "game khong hop le"}, 400)
+        if g not in games:
+            games.append(g)
+    if "all" in games:
+        games = ["all"]
+    x, y = _nt_num(b.get("x"), 0, 100, True), _nt_num(b.get("y"), 0, 100, True)
+    size, dur = _nt_num(b.get("size"), NOTICE_SIZE_MIN, NOTICE_SIZE_MAX), _nt_num(b.get("dur"), NOTICE_DUR_MIN, NOTICE_DUR_MAX)
+    if x is None or y is None:
+        return _json({"ok": False, "loi": "vi tri khong hop le"}, 400)
+    if size is None:
+        return _json({"ok": False, "loi": f"co chu tu {NOTICE_SIZE_MIN} den {NOTICE_SIZE_MAX} px"}, 400)
+    if dur is None:
+        return _json({"ok": False, "loi": f"thoi gian giu tu {NOTICE_DUR_MIN} giay den {NOTICE_DUR_MAX // 86400} ngay"}, 400)
+    now = int(time.time())
+    try:
+        with _nt_lock:                                    # đọc lại từ file ngay trong khóa (không dùng cache) rồi ghi -> không mất thông báo của lần gửi khác
+            items = [it for it in _nt_read(force=True) if it["exp"] > now]
+            if len(items) >= NOTICE_MAX_ACTIVE:
+                return _json({"ok": False, "loi": f"dang co {len(items)} thong bao chay cung luc (toi da {NOTICE_MAX_ACTIVE}) — go bot roi gui tiep"}, 409)
+            it = {"id": secrets.token_hex(6), "text": text, "games": games, "x": round(float(x), 2), "y": round(float(y), 2),
+                  "size": int(size), "t": now, "exp": now + int(dur), "by": s["n"]}
+            items.append(it)
+            _nt_write(items)
+    except OSError as e:
+        return _json({"ok": False, "loi": f"khong ghi duoc file thong bao: {e}"}, 500)
+    _audit("notice_send", by=s["n"], id=it["id"], games=games, dur=int(dur), text=text[:60])
+    return _json({"ok": True, "item": dict(it, con_lai=int(dur))})
+
+
+@app.route("/api/admin/notice/delete", methods=["POST"])
+def api_admin_notice_delete():
+    """Gỡ thông báo khỏi màn hình tool. CHỈ admin chính. Body: {"id": "..."} hoặc {"all": true}."""
+    s, err = _nt_need_main()
+    if err:
+        return err
+    b = request.get_json(silent=True)
+    if not isinstance(b, dict):
+        return _json({"ok": False, "loi": "du lieu gui len khong hop le"}, 400)
+    now = int(time.time())
+    nid = b.get("id")
+    if b.get("all") is not True and not (isinstance(nid, str) and _NT_ID_RE.fullmatch(nid)):
+        return _json({"ok": False, "loi": 'can {"id": "..."} hoac {"all": true}'}, 400)
+    try:
+        with _nt_lock:
+            cur = [it for it in _nt_read(force=True) if it["exp"] > now]
+            keep = [] if b.get("all") is True else [it for it in cur if it["id"] != nid]
+            _nt_write(keep)
+    except OSError as e:
+        return _json({"ok": False, "loi": f"khong ghi duoc file thong bao: {e}"}, 500)
+    _audit("notice_delete", by=s["n"], id=("all" if b.get("all") is True else nid), da_go=len(cur) - len(keep))
+    return _json({"ok": True, "da_go": len(cur) - len(keep)})
 
 
 _PANEL_ONLY = {"/api/ips", "/api/history/clear", "/api/history/regrade", "/api/history/wipe"}   # CHỈ panel đã duyệt / admin chính — key khách KHÔNG bao giờ được gọi
@@ -5535,9 +5935,8 @@ _PANEL_ONLY = {"/api/ips", "/api/history/clear", "/api/history/regrade", "/api/h
 def _gate_key():
     """Cổng cho endpoint dữ liệu.
     1) Admin chính (X-Admin-Token) hoặc thiết bị panel ĐÃ DUYỆT (HWID + token server cấp) -> panel=True (được ?detail=1, mọi trường).
-    2) ?detail (bất kỳ giá trị nào) trên endpoint dự đoán: ngoài (1) -> 404 NGAY (không kiểm key, không gắn thiết bị) — chỉ thiết bị được admin duyệt vào panel HTML / admin chính mới có quyền.
-    3) _PANEL_ONLY (ips / history clear·regrade·wipe): ngoài (1) -> 403, key khách không được đụng.
-    4) Còn lại cần key người dùng hợp lệ + HWID (KEY_GATE_API) và bị giới hạn tốc độ theo IP / key / số lần sai key."""
+    2) _PANEL_ONLY (ips / history clear·regrade·wipe): ngoài (1) -> 403, key khách không được đụng.
+    3) Còn lại cần key người dùng hợp lệ + HWID (KEY_GATE_API) và bị giới hạn tốc độ theo IP / key / số lần sai key."""
     p = request.path
     if request.method == "OPTIONS" or p not in _GATED_EXACT:
         return None
@@ -5557,11 +5956,9 @@ def _gate_key():
         flask_g.key_game = "all"                        # vào cả SUN + HIT + LC, không cần key
         flask_g.panel = True
         return None
-    if "detail" in request.args and p in OFFSRV_PATHS:   # ?detail chỉ dành cho panel đã duyệt / admin chính -> người khác (kể cả có key hợp lệ) nhận 404 như trang không tồn tại
-        abort(404)
     if p in _PANEL_ONLY:
         return _json({"ok": False, "loi": "forbidden"}, 403)
-    if not KEY_GATE_API:
+    if not KEY_GATE_API and p not in OFFSRV_PATHS:      # SUNVIW_GATE_API=0 chỉ nới các endpoint phụ — endpoint DỰ ĐOÁN luôn đòi key do admin tạo (không có chuyện dùng free)
         return None
     if not _rate_ok(f"ip:{ip}", RATE_IP):
         return _too_many()
@@ -5574,6 +5971,7 @@ def _gate_key():
     rec, err, _, kg = _check_user_key(k, hw, ip, ua, alts, hfresh, _path_game(p))
     if rec:
         flask_g.key_game = kg                           # game của key
+        flask_g.key_ok = True                           # _view_guard trong view đọc cờ này (key đã được xác thực)
         return None
     if err.startswith(WRONG_GAME_MSG):                 # key hợp lệ nhưng thuộc game khác
         return _json({"ok": False, "sai_game": True, "game_can": kg, "game": _path_game(p), "loi": err}, 403)
@@ -6060,6 +6458,7 @@ main{padding:0 22px 90px;min-width:0}
 .pr:hover{filter:brightness(1.1)}.pr:disabled{opacity:.55}.pr.sm{height:30px;padding:0 11px;font-size:13px}
 .sw{position:relative;width:46px;height:26px;border-radius:99px;border:0;background:var(--ln);padding:0;transition:background .15s}
 .sw::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:transform .15s}.sw.on{background:var(--no)}.sw.on::after{transform:translateX(20px)}
+.osd{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--ok);flex:none}.osd.off{background:var(--no)}.osd.part{background:var(--wa)}
 .cd{background:var(--pn);border:1px solid var(--ln);border-radius:16px;padding:18px;margin-bottom:14px}
 .cd h2{margin:0 0 12px;font-size:15.5px;font-weight:800}.hd{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}.hd h2{margin:0;flex:1}
 .gd{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:14px}
@@ -6088,8 +6487,29 @@ dialog{border:1px solid var(--ln);border-radius:18px;background:var(--pn);color:
 .rs{margin-top:14px;padding:12px 14px;border-radius:12px;border:1px solid var(--ln);background:var(--pn)}.rs.bad{border-color:var(--no)}.rs.good{border-color:var(--ok)}.rs.warn{border-color:var(--wa)}
 #ts{position:fixed;left:0;right:0;bottom:84px;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none;z-index:20}#ts div{background:var(--ink);color:var(--bg);border-radius:11px;padding:9px 16px;font-size:13.5px;animation:up .18s ease-out}#ts div.e{background:var(--no);color:#fff}@keyframes up{from{opacity:0;transform:translateY(6px)}}
 @media(max-width:860px){#sh{grid-template-columns:1fr}nav{position:fixed;top:auto;bottom:0;left:0;right:0;z-index:8;height:auto;flex-direction:row;padding:6px 6px calc(6px + env(safe-area-inset-bottom));border:0;border-top:1px solid var(--ln);justify-content:space-around;gap:0}
-nav .lg,nav .sp{display:none}nav button.n{flex-direction:column;gap:1px;height:50px;padding:0 6px;font-size:10.5px;flex:1;justify-content:center;position:relative}nav .bg{position:absolute;top:2px;right:18%;margin:0}
+nav .lg,nav .sp{display:none}nav button.n{flex-direction:column;gap:1px;height:50px;padding:0 4px;font-size:10.5px;flex:1;min-width:0;justify-content:center;position:relative}nav button.n>span:not(.bg){max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}nav .bg{position:absolute;top:2px;right:18%;margin:0}
 main{padding:0 14px 90px}.rw{grid-template-columns:22px minmax(0,1fr) auto}.rw>:nth-child(3),.rw>:nth-child(4){grid-column:2/-1}}
+/* thông báo tới tool */
+textarea.in{font:inherit;color:inherit}
+.ntv{position:relative;display:block;max-width:100%;padding:0;overflow:hidden;border:1.5px dashed var(--ln);border-radius:14px;background:linear-gradient(135deg,#131a30,#0b0f1c);color:#fff;text-align:left;transition:border-color .12s}
+.ntv:hover{border-color:var(--ac)}
+.ntvt{position:absolute;left:0;top:0;width:max-content;max-width:90%;text-align:center;white-space:pre-wrap;overflow-wrap:anywhere;font-weight:700;line-height:1.25;text-shadow:0 0 3px #000,0 0 6px rgba(0,0,0,.8);pointer-events:none}
+.ntvt.ph,.ntd.ph{opacity:.55}
+#ntp{position:fixed;inset:0;z-index:1000;background:#05070f;overscroll-behavior:contain;user-select:none;-webkit-user-select:none}
+.ntm{position:absolute;inset:0;overflow:hidden;background:repeating-linear-gradient(135deg,rgba(255,255,255,.025) 0 14px,transparent 14px 28px),linear-gradient(160deg,#10172c,#070a14)}
+.ntm-g{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);color:rgba(255,255,255,.12);font-size:min(9vw,64px);font-weight:800;letter-spacing:.04em;white-space:nowrap}
+.ntm-tb,.ntm-rb{position:absolute;display:grid;place-items:center;border:1.5px dashed rgba(255,255,255,.28);border-radius:12px;background:rgba(255,255,255,.04);color:rgba(255,255,255,.4);font-size:12px}
+.ntm-tb{right:10px;top:10px;width:150px;height:78px}
+.ntm-rb{right:12px;bottom:12px;width:min(310px,45vw);height:min(170px,26vw)}
+.ntm-l{position:absolute;background:rgba(255,255,255,.08)}
+.ntd{position:absolute;width:max-content;max-width:90vw;padding:4px 8px;text-align:center;white-space:pre-wrap;overflow-wrap:anywhere;color:#fff;font-weight:700;line-height:1.25;text-shadow:0 0 3px #000,0 0 8px rgba(0,0,0,.85),0 2px 10px rgba(0,0,0,.7);cursor:grab;touch-action:none;outline:2px dashed rgba(141,156,255,.9);outline-offset:2px;border-radius:6px;z-index:2}
+.ntd.dg{cursor:grabbing;outline-color:#fff}
+.ntk{position:fixed;left:50%;bottom:max(16px,env(safe-area-inset-bottom));transform:translateX(-50%);z-index:5;width:min(460px,94vw);padding:10px 14px;background:var(--pn);color:var(--ink);border:1px solid var(--ln);border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.5)}
+.ntk-h{display:flex;align-items:center;gap:8px;justify-content:space-between}
+.ntk-r{display:flex;align-items:center;gap:10px;margin:10px 0 4px}.ntk-r input{flex:1;accent-color:var(--ac)}.ntk-r b{min-width:46px;text-align:right}
+.ntk-a{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
+.ntk.min .ntk-b{display:none}.ntk.min{width:auto}
+.ntk{transition:opacity .15s}.ntk.fade{opacity:.18;pointer-events:none}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style></head><body>
 <div id="app"></div><dialog id="dg"></dialog><div id="ts"></div>
@@ -6104,8 +6524,10 @@ const GL={sun:'Sun',hit:'Hit',lc79:'LC79',autolc:'Auto cược LC',gb68:'68GB',a
 const ic=p=>`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
 const I={home:ic('<path d="M3 11 12 3l9 8M5 10v10h14V10"/>'),key:ic('<circle cx="8" cy="15" r="4"/><path d="M10.8 12.2 20 3m-4 4 3 3"/>'),plus:ic('<path d="M12 5v14M5 12h14"/>'),dev:ic('<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>'),bet:ic('<path d="M3 17l6-6 4 4 8-8M14 7h7v7"/>'),rev:ic('<path d="M12 2v20M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>'),
  cp:ic('<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>'),del:ic('<path d="M4 7h16M10 11v6m4-6v6M6 7l1 13h10l1-13M9 7V4h6v3"/>'),rf:ic('<path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/>'),out:ic('<path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M16 8l4 4-4 4M20 12H9"/>'),mo:ic('<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>'),th:ic('<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/>'),clk:ic('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>')};
+I.bell=ic('<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>');
+I.pwr=ic('<path d="M12 3v9"/><path d="M6.4 6.4a8 8 0 1 0 11.2 0"/>');
 let S=null;try{S=JSON.parse(sessionStorage.getItem('as')||'null')}catch(e){}
-let V='ov',KEYS=[],DAYS=[1,3,7,30,60,90],DEVO=[1,2,3,5,10,20,50],GAMES=[{id:'sun'},{id:'hit'},{id:'lc79'},{id:'autolc'}],NEW=[],FL=new Set(),SEL=new Set(),F={t:'all',s:'new',q:''},CF={type:'user',game:'sun',days:30,dev:1,n:1,ba:0,bu:'hour'},PV=[],PF='pending',OS=null,RV=null,AC=null,ACF='all',busy=false,need=false,lastT=0;
+let V='ov',KEYS=[],DAYS=[1,3,7,30,60,90],DEVO=[1,2,3,5,10,20,50],GAMES=[{id:'sun'},{id:'hit'},{id:'lc79'},{id:'autolc'}],NEW=[],FL=new Set(),SEL=new Set(),F={t:'all',s:'new',q:''},CF={type:'user',game:'sun',days:30,dev:1,n:1,ba:0,bu:'hour'},PV=[],PF='pending',OS=null,RV=null,AC=null,ACF='all',busy=false,need=false,lastT=0,NT=null,ND={all:false,games:[],text:'',x:50,y:20,size:28,dur:300,cn:5,cu:'m',pos:false,bad:false};
 const isM=()=>S&&S.role==='main',sleep=ms=>new Promise(r=>setTimeout(r,ms));
 function toast(m,bad){const e=document.createElement('div');if(bad)e.className='e';e.textContent=m;$('#ts').appendChild(e);setTimeout(()=>e.remove(),2600)}
 function ask(msg,ok){return new Promise(r=>{const d=$('#dg');d.innerHTML=`<div class="di"><p style="margin:0">${esc(msg)}</p><div class="da"><button class="gh" data-x="no">Hủy</button><button class="pr" data-x="ok">${esc(ok||'Xác nhận')}</button></div></div>`;d.onclose=null;d.dataset.ask=1;d.dataset.k='';d._r=r;d.showModal()})}
@@ -6134,7 +6556,7 @@ async function login(){
   if(j.dev_locked)return res('bad','Key đã đủ số thiết bị',j.loi);
   res(j.kind==='user'?'warn':'bad',{user:'Đây là key người dùng',none:'Không tìm thấy key',locked:'Tạm khóa do nhập sai nhiều lần'}[j.kind]||'Không vào được',j.loi||'')}
 /* ── dữ liệu ── */
-async function boot(){shell();await loadKeys();if(isM()){loadPv();loadOs();loadRv();loadAc()}}
+async function boot(){shell();await loadKeys();if(isM()){loadPv();loadOs();loadRv();loadAc();loadNt()}}
 async function loadKeys(){const j=await api('/api/admin/keys');if(!S)return;if(j.ok){KEYS=j.keys;lastT=now();DAYS=j.ngay||DAYS;DEVO=j.so_tb||DEVO;GAMES=j.games||GAMES;const h=new Set(KEYS.map(r=>r.key));SEL=new Set([...SEL].filter(k=>h.has(k)))}paint()}
 async function loadPv(){const j=await api('/api/admin/panel');if(S&&j.ok){PV=j.devices;paint()}}
 async function loadOs(){const j=await api('/api/admin/offserver');if(S&&j.ok){OS=j;paint()}}
@@ -6173,6 +6595,7 @@ function vOv(){const live=KEYS.filter(r=>stt(r)[0]!=='ex').length,soon=KEYS.filt
  const by=g=>KEYS.filter(r=>r.loai==='user'&&r.game===g).length;
  return `<div class="gd"><div class="st"><b>${live}</b><span>Key còn hạn / ${KEYS.length}</span></div><div class="st"><b class="${soon.length?'noc':''}">${soon.length}</b><span>Sắp hết hạn (&lt;24h)</span></div><div class="st"><b>${dv}</b><span>Thiết bị đang gắn</span></div>${isM()?`<div class="st"><b class="${pend?'noc':''}">${pend}</b><span>Thiết bị chờ duyệt</span></div>`:''}</div>
  <div class="cd"><div class="hd"><h2>Cần gia hạn ngay</h2>${soon.length?`<button class="pr sm" data-a="allsoon">${I.clk} +1 giờ cho cả ${soon.length} key</button>`:''}</div>${soon.length?soon.slice(0,8).map(row).join(''):'<div class="em">Không có key nào sắp hết hạn.</div>'}</div>
+ ${isM()&&OS&&OS.any?`<div class="cd" style="border-color:var(--no)"><div class="hd"><h2><span class="osd off"></span> Đang OFF SERVER: ${OS.tables.filter(r=>r.off).map(r=>esc(r.ten)).join(' · ')}</h2><button class="gh" data-a="osgo">Quản lý</button></div><div class="s mu">Tool ngoài dùng các bàn này đang không lấy được dự đoán.</div></div>`:''}
  <div class="cd"><h2>Key theo game</h2><div class="pl">${GAMES.map(g=>`<span class="bd g g-${esc(g.id)}" style="height:30px;padding:0 12px;font-size:13px">${esc(GL[g.id]||g.id)} · ${by(g.id)}</span>`).join('')}</div></div>
  ${isM()&&RV?`<div class="cd"><h2>Doanh thu</h2><div class="gd" style="margin:0">${[['ngay','24 giờ'],['tuan','7 ngày'],['thang','30 ngày']].map(([k,t])=>`<div class="st"><b style="font-size:21px">${vnd(RV.doanh_thu[k].tong)}</b><span>${t} · ${RV.doanh_thu[k].so_key} key</span></div>`).join('')}</div></div>`:''}`}
 function vMk(){const m=isM(),pb=(id,arr,cur,lab)=>`<div class="pl" id="${id}">${arr.map(v=>`<button data-c="${id}" data-v="${esc(v)}" class="${v==cur?'on':''}">${esc(lab(v))}</button>`).join('')}</div>`;
@@ -6192,25 +6615,126 @@ const ACL={running:'Đang cược',paused:'Pause',hold:'Tạm dừng',ready:'S�
 function vAc(){const all=(AC&&AC.sessions)||[],run=all.filter(s=>s.alive),rows=ACF==='run'?run:ACF==='stop'?all.filter(s=>!s.alive):all,tn=all.reduce((n,s)=>n+s.net,0);
  return `<div class="gd"><div class="st"><b>${all.length}</b><span>Tài khoản</span></div><div class="st"><b>${run.length}</b><span>Đang cược</span></div><div class="st"><b>${fN(all.reduce((n,s)=>n+s.balance,0))}</b><span>Tổng số dư</span></div><div class="st"><b class="${tn>=0?'okc':'noc'}">${fNet(tn)}</b><span>Tổng lãi / lỗ</span></div></div>
  <div class="cd"><div class="hd"><h2>Auto cược LC79</h2><button class="gh" data-a="acrf">${I.rf}</button></div><div class="cp">${[['all','Tất cả'],['run','Đang cược'],['stop','Đã dừng']].map(([f,t])=>`<button data-acf="${f}" class="${ACF===f?'on':''}">${t}</button>`).join('')}</div>
- ${rows.length?`<div class="tw"><table><thead><tr><th>Tài khoản</th><th>Trạng thái</th><th class="r">Số dư</th><th class="r">Lãi / lỗ</th><th class="r">Thắng / thua</th></tr></thead><tbody>${rows.map(s=>`<tr data-id="${esc(s.id)}"><td><b>${esc(s.nick||s.username)}</b><div class="s mu">@${esc(s.username)}</div></td><td><span class="bd ${s.alive?'ok':'ex'}">${esc(ACL[s.status]||s.status)}</span></td><td class="r">${fN(s.balance)}</td><td class="r ${s.net>=0?'okc':'noc'}"><b>${fNet(s.net)}</b></td><td class="r">${s.wins} / ${s.losses}</td></tr>`).join('')}</tbody></table></div>`:`<div class="em">${AC&&!AC.bat?'Auto cược đang tắt.':'Chưa có tài khoản nào.'}</div>`}</div>`}
+ ${rows.length?`<div class="tw"><table><thead><tr><th>Tài khoản</th><th>Trạng thái</th><th class="r">Số dư</th><th class="r">Lãi / lỗ</th><th class="r">Thắng / thua</th></tr></thead><tbody>${rows.map(s=>`<tr data-id="${esc(s.id)}"><td><b>${esc(s.nick||s.username)}</b><div class="s mu">@${esc(s.username)} · ${esc(s.ban||'LC MD5')}</div></td><td><span class="bd ${s.alive?'ok':'ex'}">${esc(ACL[s.status]||s.status)}</span></td><td class="r">${fN(s.balance)}</td><td class="r ${s.net>=0?'okc':'noc'}"><b>${fNet(s.net)}</b></td><td class="r">${s.wins} / ${s.losses}</td></tr>`).join('')}</tbody></table></div>`:`<div class="em">${AC&&!AC.bat?'Auto cược đang tắt.':'Chưa có tài khoản nào.'}</div>`}</div>`}
 function openAc(id){const s=((AC&&AC.sessions)||[]).find(x=>x.id===id);if(!s)return;const d=$('#dg');d.dataset.ask='';d.dataset.k='';const c=(v,l,k)=>`<div class="st"><b style="font-size:19px" class="${k||''}">${v}</b><span>${l}</span></div>`;
- d.innerHTML=`<div class="di"><div class="hd"><h3>${esc(s.nick||s.username)}</h3><span class="bd ${s.alive?'ok':'ex'}">${esc(ACL[s.status]||s.status)}</span><button class="ib" data-x="c">✕</button></div><div class="s mu">@${esc(s.username)} · key ${esc(acKey(s.owner))}</div>
+ d.innerHTML=`<div class="di"><div class="hd"><h3>${esc(s.nick||s.username)}</h3><span class="bd ${s.alive?'ok':'ex'}">${esc(ACL[s.status]||s.status)}</span><button class="ib" data-x="c">✕</button></div><div class="s mu">@${esc(s.username)} · bàn ${esc(s.ban||'LC MD5')} · key ${esc(acKey(s.owner))}</div>
  <div class="gd" style="margin-top:12px">${c(fN(s.balance),'Số dư')}${c(fNet(s.net),'Lãi / lỗ',s.net>=0?'okc':'noc')}${c(s.wins+' / '+s.losses,'Thắng / thua')}${c(fN(s.total_bet),'Tổng đã cược')}</div>
  <h4>Chiến thuật</h4><div><b>${esc(s.ten)}</b></div><ul class="s" style="margin:6px 0;padding-left:18px">${(s.chien_thuat||[]).map(x=>`<li>${esc(x)}</li>`).join('')}</ul>
  <div class="da" style="justify-content:flex-start">${s.alive?`<button class="gh dg" data-a="acs" data-v="${esc(s.id)}">Dừng auto cược</button>`:''}<button class="gh dg" data-a="acx" data-v="${esc(s.id)}">Xóa tài khoản</button></div></div>`;if(!d.open)d.showModal()}
 function vRv(){if(!RV)return'<div class="em">Đang tải…</div>';const W=[['ngay','1 ngày','24 giờ gần nhất'],['tuan','1 tuần','7 ngày gần nhất'],['thang','1 tháng','30 ngày gần nhất']];
  return `<div class="gd">${W.map(([k,t,sub])=>`<div class="st"><b style="font-size:23px">${vnd(RV.doanh_thu[k].tong)}</b><span>${t} · ${RV.doanh_thu[k].so_key} key<br>${sub}</span></div>`).join('')}</div>
  <div class="cd"><div class="hd"><h2>Theo game</h2><button class="gh" data-a="rvrf">${I.rf}</button></div>${W.map(([k,t])=>{const o=RV.doanh_thu[k];return `<p style="margin:6px 0"><b>${t}:</b> ${Object.keys(o.game).filter(g=>g!=='all'||o.game[g].so_key).map(g=>`<span class="bd g g-${esc(g)}">${esc(GL[g]||g)}</span> ${vnd(o.game[g].tien)} <span class="mu s">(${o.game[g].so_key} key)</span>`).join(' &nbsp; ')}</p>`}).join('')}<div class="s mu" style="margin-top:8px">Bảng giá: ${Object.entries(RV.bang_gia).map(([d,p])=>(DL[d]||d+' ngày')+' = '+vnd(p)).join(' · ')}. Giờ cộng thêm không tính vào doanh thu.</div></div>`}
-const TABS=[['ov','Tổng quan','home'],['keys','Key','key'],['mk','Tạo key','plus'],['pv','Thiết bị','dev',1],['ac','Auto cược','bet',1],['rv','Doanh thu','rev',1]];
+/* ── thông báo tới tool (CHỈ admin chính; server kiểm lại mọi request) ── */
+const NTP=[[30,'30 giây'],[60,'1 phút'],[300,'5 phút'],[900,'15 phút'],[3600,'1 giờ'],[21600,'6 giờ'],[86400,'1 ngày']],NTUN=[['s','giây',1],['m','phút',60],['h','giờ',3600],['d','ngày',86400]];
+const ntFmt=s=>{s=Math.max(0,Math.round(s));const d=s/86400|0,h=s%86400/3600|0,m=s%3600/60|0,x=s%60,p=[];if(d)p.push(d+' ngày');if(h)p.push(h+' giờ');if(m)p.push(m+' phút');if(x||!p.length)p.push(x+' giây');return p.slice(0,2).join(' ')};
+const ntCfg=()=>(NT&&NT.cfg)||{games:GAMES.map(g=>({id:g.id})),text_max:300,size:[12,96,28],dur:[5,2592000]};
+const ntPosTxt=()=>'Vị trí: ngang '+Math.round(ND.x)+'% · dọc '+Math.round(ND.y)+'%'+(ND.pos?'':' (mặc định — bấm khung phía trên để chọn)');
+async function loadNt(){const j=await api('/api/admin/notice');if(S&&j.ok){j.items.forEach(x=>x.xl=now()+x.con_lai);NT=j;paint()}}
+function ntSyncCustom(){for(const u of [...NTUN].reverse()){if(ND.dur%u[2]===0){ND.cn=ND.dur/u[2];ND.cu=u[0];return}}}
+function ntForm(){const c=ntCfg(),sel=ND.all?'TẤT CẢ game':ND.games.length?ND.games.map(g=>GL[g]||g).join(', '):'chưa chọn game';
+  const pill=(on,a,v,t)=>`<button type="button" class="${on?'on':''}" data-a="${a}" data-v="${esc(v)}">${esc(t)}</button>`;
+  return `<div class="cd"><h2>Gửi thông báo tới tool</h2>
+  <div class="lb" style="margin-top:0">Game nhận thông báo <span class="mu s">— chỉ tool của game được chọn mới hiện</span></div>
+  <div class="pl">${pill(ND.all,'ntg','all','Tất cả game')}${c.games.map(g=>pill(!ND.all&&ND.games.includes(g.id),'ntg',g.id,GL[g.id]||g.id)).join('')}</div>
+  <div class="s mu" style="margin-top:6px">Sẽ gửi tới: <b>${esc(sel)}</b></div>
+  <div class="lb">Nội dung</div>
+  <textarea class="in" id="ntx" rows="3" maxlength="${c.text_max}" placeholder="Nhập nội dung thông báo…" style="width:100%;height:auto;padding:10px 12px;resize:vertical;line-height:1.45">${esc(ND.text)}</textarea>
+  <div class="s mu" id="ntc" style="text-align:right">${ND.text.length}/${c.text_max}</div>
+  <div class="lb">Vị trí hiện chữ &amp; cỡ chữ</div>
+  <button class="ntv" id="ntv" type="button" data-a="ntpos" aria-label="Chọn vị trí hiện chữ"><span class="ntvt" id="ntvt"></span></button>
+  <div class="tb" style="margin:10px 0 0;align-items:center"><button class="pr sm" type="button" data-a="ntpos">Chọn vị trí trên giao diện tool</button><span class="s mu" id="ntps">${esc(ntPosTxt())}</span></div>
+  <div class="s mu" style="margin-top:4px">Bấm vào khung (hoặc nút) → hiện toàn giao diện tool → kéo chữ tới chỗ muốn. Khung này thu nhỏ đúng tỉ lệ màn hình.</div>
+  <div class="tb" style="margin:10px 0 0;align-items:center"><span class="s">Cỡ chữ</span><input type="range" id="nts" min="${c.size[0]}" max="${c.size[1]}" step="1" value="${ND.size}" style="flex:1 1 180px;accent-color:var(--ac)"><b id="ntsv" style="min-width:48px">${ND.size}px</b></div>
+  <div class="lb">Giữ thông báo trong <span class="mu s">— tính từ lúc bấm gửi</span></div>
+  <div class="pl">${NTP.map(([v,t])=>pill(ND.dur===v,'ntd',v,t)).join('')}</div>
+  <div class="tb" style="margin:10px 0 0;align-items:center"><span class="s">Hoặc tự nhập</span><input class="in" id="ntn" type="number" min="1" step="1" value="${ND.cn}" style="width:96px"><select class="in" id="ntu">${NTUN.map(u=>`<option value="${u[0]}"${ND.cu===u[0]?' selected':''}>${u[1]}</option>`).join('')}</select><span class="s mu" id="ntdp">= ${esc(ntFmt(ND.dur))}</span></div>
+  <div class="da" style="justify-content:flex-start"><button class="pr" type="button" data-a="ntsend">${I.bell} Gửi thông báo</button></div></div>`}
+function ntRow(x){const gs=x.games.map(g=>g==='all'?'<span class="bd ok">Tất cả game</span>':`<span class="bd g g-${esc(g)}">${esc(GL[g]||g)}</span>`).join(' ');
+  return `<div class="rw" style="grid-template-columns:minmax(0,1fr) auto"><div><div class="kc">${gs}<span class="bd wait" data-nx="${x.xl}">còn ${esc(ntFmt(x.xl-now()))}</span></div><div style="margin:6px 0 2px;white-space:pre-wrap;overflow-wrap:anywhere">${esc(x.text)}</div><div class="s mu">Vị trí ${Math.round(x.x)}% / ${Math.round(x.y)}% · cỡ ${x.size}px · gửi ${esc(fmt(x.t))}</div></div><div class="ra"><button class="gh dg" type="button" data-a="ntdel" data-v="${esc(x.id)}">${I.del} Gỡ</button></div></div>`}
+function ntListHtml(){if(!NT)return'<div class="cd"><div class="em">Đang tải…</div></div>';const a=NT.items;
+  return `<div class="cd"><div class="hd"><h2>Đang hiển thị trên tool (${a.length})</h2>${a.length?`<button class="gh dg" type="button" data-a="ntclr">${I.del} Gỡ tất cả</button>`:''}<button class="gh" type="button" data-a="ntrf">${I.rf}</button></div>${a.length?a.map(ntRow).join(''):'<div class="em">Chưa có thông báo nào đang chạy.</div>'}</div>`}
+function vNt(){return `<div id="ntf">${ntForm()}</div><div id="ntl">${ntListHtml()}</div>`}
+function ntList(){const e=$('#ntl');if(e)e.innerHTML=ntListHtml()}
+function ntFormPaint(){const f=$('#ntf');if(f){f.innerHTML=ntForm();ntPrev()}}
+/* đặt TÂM phần tử tại (x%, y%) của khung nhìn, kẹp cho nằm trọn trong màn hình; trả về vị trí thực tế (%) — tool dùng đúng công thức này */
+function ntPlace(el,x,y){el.style.left='0px';el.style.top='0px';const r=el.getBoundingClientRect(),W=innerWidth,H=innerHeight,hw=r.width/2+4,hh=r.height/2+4,
+  cx=Math.min(Math.max(W*x/100,hw),Math.max(hw,W-hw)),cy=Math.min(Math.max(H*y/100,hh),Math.max(hh,H-hh));
+  el.style.left=Math.round(cx-r.width/2)+'px';el.style.top=Math.round(cy-r.height/2)+'px';return{x:+(cx/W*100).toFixed(2),y:+(cy/H*100).toFixed(2)}}
+function ntPrev(){const f=$('#ntv'),t=$('#ntvt');if(!f||!t)return;
+  const asp=innerWidth/innerHeight,pw=Math.max(120,(f.parentElement.clientWidth||320)-36),w=Math.max(120,Math.min(pw,560,300*asp)),k=w/innerWidth;   // khung = màn hình admin thu nhỏ, giữ đúng tỉ lệ
+  f.style.width=w.toFixed(1)+'px';f.style.height=(w/asp).toFixed(1)+'px';
+  t.textContent=ND.text||'Nội dung thông báo';t.classList.toggle('ph',!ND.text);t.style.fontSize=Math.max(5,ND.size*k).toFixed(1)+'px';
+  t.style.left='0px';t.style.top='0px';const r=t.getBoundingClientRect(),fw=f.clientWidth,fh=f.clientHeight,hw=r.width/2+2,hh=r.height/2+2,
+  cx=Math.min(Math.max(fw*ND.x/100,hw),Math.max(hw,fw-hw)),cy=Math.min(Math.max(fh*ND.y/100,hh),Math.max(hh,fh-hh));
+  t.style.left=(cx-r.width/2)+'px';t.style.top=(cy-r.height/2)+'px'}
+function ntCustom(){const n=+($('#ntn')||{}).value,u=NTUN.find(x=>x[0]===($('#ntu')||{}).value)||NTUN[1],s=n*u[2],c=ntCfg().dur,e=$('#ntdp');ND.cn=n;ND.cu=u[0];
+  if(!(Number.isInteger(n)&&n>0&&s>=c[0]&&s<=c[1])){ND.bad=true;if(e)e.innerHTML='<span class="noc">Từ '+ntFmt(c[0])+' đến '+ntFmt(c[1])+'</span>';return}
+  ND.bad=false;ND.dur=s;if(e)e.textContent='= '+ntFmt(s);document.querySelectorAll('[data-a="ntd"]').forEach(b=>b.classList.toggle('on',+b.dataset.v===ND.dur))}
+/* ── chọn vị trí: màn hình toàn tool, kéo chữ tới chỗ muốn ── */
+let NTB=null;
+function ntPickInfo(){const e=$('#ntpr');if(e)e.textContent='Ngang '+Math.round(ND.x)+'% · Dọc '+Math.round(ND.y)+'% · Cỡ chữ '+ND.size+'px'}
+function ntPickPaint(){const d=$('#ntd');if(!d)return;d.textContent=ND.text||'Nội dung thông báo';d.classList.toggle('ph',!ND.text);d.style.fontSize=ND.size+'px';const p=ntPlace(d,ND.x,ND.y);ND.x=p.x;ND.y=p.y;ntPickInfo()}
+function ntKey(e){if(e.key==='Escape'){e.preventDefault();e.stopPropagation();ntClose(true)}}
+function ntClose(cancel){const o=$('#ntp');if(!o)return;if(cancel&&NTB){ND.x=NTB.x;ND.y=NTB.y;ND.size=NTB.size;ND.pos=NTB.pos}else ND.pos=true;
+  o.remove();document.body.style.overflow='';removeEventListener('keydown',ntKey,true);removeEventListener('resize',ntPickPaint);ntFormPaint()}
+function ntPick(){if($('#ntp'))return;NTB={x:ND.x,y:ND.y,size:ND.size,pos:ND.pos};const c=ntCfg(),o=document.createElement('div');o.id='ntp';
+  o.innerHTML=`<div class="ntm"><div class="ntm-tb">Thanh công cụ của tool</div><div class="ntm-rb">Robot</div><div class="ntm-g">MÀN HÌNH GAME</div><i class="ntm-l" style="left:50%;top:0;bottom:0;width:1px"></i><i class="ntm-l" style="top:50%;left:0;right:0;height:1px"></i></div>
+  <div class="ntd" id="ntd"></div>
+  <div class="ntk" id="ntk"><div class="ntk-h"><b>Kéo chữ tới vị trí muốn hiện</b><button class="ib" type="button" data-a="ntcol" aria-label="Thu gọn / mở rộng">▾</button></div><div class="ntk-b">
+  <div class="ntk-r"><span class="s">Cỡ chữ</span><input type="range" id="ntps2" min="${c.size[0]}" max="${c.size[1]}" step="1" value="${ND.size}"><b id="ntps2v">${ND.size}px</b></div>
+  <div class="s mu" id="ntpr"></div>
+  <div class="ntk-a"><button class="gh" type="button" data-a="ntmid">Về giữa</button><button class="gh" type="button" data-a="ntno">Hủy</button><button class="pr" type="button" data-a="ntok">Xong</button></div></div></div>`;
+  document.body.appendChild(o);document.body.style.overflow='hidden';addEventListener('keydown',ntKey,true);addEventListener('resize',ntPickPaint);
+  const d=$('#ntd');let g=null;ntPickPaint();
+  d.addEventListener('pointerdown',e=>{e.preventDefault();d.setPointerCapture(e.pointerId);const r=d.getBoundingClientRect();g={dx:e.clientX-(r.left+r.width/2),dy:e.clientY-(r.top+r.height/2)};d.classList.add('dg');$('#ntk').classList.add('fade')});
+  d.addEventListener('pointermove',e=>{if(!g)return;const p=ntPlace(d,(e.clientX-g.dx)/innerWidth*100,(e.clientY-g.dy)/innerHeight*100);ND.x=p.x;ND.y=p.y;ND.pos=true;ntPickInfo()});
+  const up=()=>{g=null;d.classList.remove('dg');const k=$('#ntk');if(k)k.classList.remove('fade')};d.addEventListener('pointerup',up);d.addEventListener('pointercancel',up)}
+async function ntAct(b){const d=b.dataset,a=d.a,v=d.v;
+  if(a==='ntg'){if(v==='all'){ND.all=!ND.all;if(ND.all)ND.games=[]}else{ND.all=false;const i=ND.games.indexOf(v);i<0?ND.games.push(v):ND.games.splice(i,1)}return ntFormPaint()}
+  if(a==='ntd'){ND.dur=+v;ND.bad=false;ntSyncCustom();return ntFormPaint()}
+  if(a==='ntpos')return ntPick();
+  if(a==='ntok')return ntClose(false);
+  if(a==='ntno')return ntClose(true);
+  if(a==='ntmid'){ND.x=50;ND.y=50;ND.pos=true;return ntPickPaint()}
+  if(a==='ntcol'){const k=$('#ntk');if(k)k.classList.toggle('min');return}
+  if(a==='ntrf'){await loadNt();return toast('Đã làm mới')}
+  if(a==='ntdel'){if(!await ask('Gỡ thông báo này khỏi màn hình tool ngay?','Gỡ'))return;const j=await api('/api/admin/notice/delete',{id:v});if(j.ok){await loadNt();toast('Đã gỡ thông báo')}else toast(j.loi||'Lỗi',1);return}
+  if(a==='ntclr'){if(!await ask('Gỡ TẤT CẢ thông báo đang chạy?','Gỡ hết'))return;const j=await api('/api/admin/notice/delete',{all:true});if(j.ok){await loadNt();toast('Đã gỡ '+j.da_go+' thông báo')}else toast(j.loi||'Lỗi',1);return}
+  if(a==='ntsend'){const text=ND.text.trim();
+    if(!text)return toast('Chưa nhập nội dung thông báo',1);
+    if(!ND.all&&!ND.games.length)return toast('Chọn ít nhất 1 game (hoặc Tất cả game)',1);
+    if(ND.bad)return toast('Thời gian giữ không hợp lệ',1);
+    const gs=ND.all?['all']:ND.games.slice(),names=ND.all?'TẤT CẢ game':gs.map(g=>GL[g]||g).join(', ');
+    if(!await ask('Gửi thông báo tới '+names+' và giữ trong '+ntFmt(ND.dur)+'?','Gửi ngay'))return;
+    b.disabled=true;const j=await api('/api/admin/notice/send',{games:gs,text,x:ND.x,y:ND.y,size:ND.size,dur:ND.dur});if(b.isConnected)b.disabled=false;
+    if(j.ok){ND.text='';toast('Đã gửi thông báo tới '+names);await loadNt();ntFormPaint()}else toast(j.loi||'Lỗi',1);return}}
+addEventListener('resize',()=>ntPrev());
+document.addEventListener('input',e=>{const t=e.target,id=t.id;
+  if(id==='ntx'){ND.text=t.value;const c=$('#ntc');if(c)c.textContent=t.value.length+'/'+ntCfg().text_max;ntPrev()}
+  else if(id==='nts'){ND.size=+t.value;$('#ntsv').textContent=ND.size+'px';$('#ntps').textContent=ntPosTxt();ntPrev()}
+  else if(id==='ntps2'){ND.size=+t.value;$('#ntps2v').textContent=ND.size+'px';ntPickPaint()}
+  else if(id==='ntn')ntCustom()});
+document.addEventListener('change',e=>{if(e.target.id==='ntu')ntCustom()});
+setInterval(()=>{if(!S||V!=='nt'||!NT)return;const n=now();let gone=false;document.querySelectorAll('[data-nx]').forEach(e=>{const r=+e.dataset.nx-n;if(r<=0)gone=true;else e.textContent='còn '+ntFmt(r)});if(gone){NT.items=NT.items.filter(x=>x.xl>n);ntList()}},1000);
+/* ── Off server theo từng bàn / game ── */
+function osRow(r){return `<div class="rw" style="grid-template-columns:minmax(0,1fr) auto;padding:12px 4px"><div><div class="kc"><b>${esc(r.ten)}</b><span class="bd ${r.off?'ex':'ok'}">${r.off?'OFF — tool ngoài bị chặn':'Online'}</span></div><div class="s mu" style="margin-top:3px">${r.off?(r.luc?'Tắt '+esc(ago(r.luc))+(r.boi?' · bởi '+esc(r.boi):''):'Tắt từ cấu hình khởi động'):'Tool có key hợp lệ lấy dự đoán bình thường'}</div></div><button class="sw${r.off?' on':''}" type="button" data-a="ost" data-v="${esc(r.key)}" aria-pressed="${r.off}" aria-label="${esc((r.off?'Bật lại ':'Tắt ')+r.ten)}"></button></div>`}
+function osGame(g){const rows=OS.tables.filter(r=>r.game===g.key);
+  return `<div class="cd"><div class="hd"><h2><span class="bd g g-${esc(g.key)}" style="height:28px;padding:0 12px;font-size:14px">${esc(g.ten)}</span></h2><span class="s mu">${g.off?'Cả game đang OFF':g.mot_phan?'Một phần đang OFF':'Online'}</span><button class="gh${g.off?'':' dg'}" type="button" data-a="osg" data-v="${esc(g.key)}">${g.off?'Bật lại cả game':'Tắt cả game'}</button></div>${rows.map(osRow).join('')}</div>`}
+function vOs(){if(!OS)return'<div class="cd"><div class="em">Đang tải…</div></div>';
+  return `<div class="cd"><div class="hd"><h2>Off server theo từng bàn</h2><button class="gh dg" type="button" data-a="osall" data-v="1">Tắt tất cả</button><button class="gh" type="button" data-a="osall" data-v="0">Bật tất cả</button></div>
+  <div class="s mu" style="line-height:1.6">Bàn nào OFF thì <b>chỉ tool dùng bàn đó</b> không lấy được dự đoán (nhận lỗi 503) — các bàn còn lại chạy bình thường. Server vẫn quét dữ liệu &amp; tính dự đoán; panel của thiết bị đã duyệt và admin chính vẫn xem được. Auto cược LC tự ngừng đặt cược mới khi <b>LC · MD5</b> OFF.</div></div>${OS.games.map(osGame).join('')}`}
+async function osSet(body,msg,okMsg){if(!await ask(msg,'Xác nhận'))return;const j=await api('/api/admin/offserver',body);if(j.ok){OS=j;paint();toast(okMsg)}else toast(j.loi||'Lỗi',1)}
+const TABS=[['ov','Tổng quan','home'],['keys','Key','key'],['mk','Tạo key','plus'],['pv','Thiết bị','dev',1],['ac','Auto cược','bet',1],['rv','Doanh thu','rev',1],['nt','Thông báo','bell',1],['os','Off server','pwr',1]];
 function shell(){const m=isM(),tabs=TABS.filter(t=>m||!t[3]);if(!tabs.some(t=>t[0]===V))V='ov';
  $('#app').innerHTML=`<div id="sh"><nav><div class="lg"><i>${I.key}</i>SUNVIW</div>${tabs.map(t=>`<button class="n${V===t[0]?' on':''}" data-v="${t[0]}">${I[t[2]]}<span>${t[1]}</span>${t[0]==='pv'?'<span class="bg" id="pvb" hidden></span>':''}</button>`).join('')}<div class="sp"></div><button class="n" data-a="th">${I.th}<span>Giao diện</span></button><button class="n" data-a="out">${I.out}<span>Đăng xuất</span></button></nav>
- <main><div class="tp"><h1 id="ttl"></h1>${m?`<span class="s mu" id="osl"></span><button class="sw" id="sw" data-a="os" aria-label="Off server"></button>`:''}<span class="ch">${m?'Admin chính':esc(S.name)}</span></div><div id="vw"></div></main></div>`}
+ <main><div class="tp"><h1 id="ttl"></h1>${m?`<button class="gh" id="osb" type="button" data-a="osgo" aria-label="Off server theo từng bàn"><i class="osd" id="osd"></i><span class="s" id="osl">Server</span></button>`:''}<span class="ch">${m?'Admin chính':esc(S.name)}</span></div><div id="vw"></div></main></div>`}
 function paint(){if(!$('#vw'))return;const t=TABS.find(x=>x[0]===V);$('#ttl').textContent=t?t[1]:'';
  document.querySelectorAll('nav button.n[data-v]').forEach(b=>b.classList.toggle('on',b.dataset.v===V));
  const pend=PV.filter(x=>x.trang_thai==='pending').length,pb=$('#pvb');if(pb){pb.hidden=!pend;pb.textContent=pend}
- const sw=$('#sw');if(sw&&OS){sw.classList.toggle('on',OS.off);$('#osl').textContent=OS.off?'Off server: tool ngoài bị chặn':'Server online'}
+ const od=$('#osd');if(od&&OS){od.className='osd'+(OS.off?' off':OS.any?' part':'');$('#osl').textContent=OS.off?'Off: tất cả bàn':OS.any?'Off '+OS.n_off+'/'+OS.tables.length+' bàn':'Server online'}
  const f=document.activeElement,keep=f&&f.id==='fq'?f.selectionStart:-1;
- $('#vw').innerHTML=({ov:vOv,keys:renderKeys,mk:vMk,pv:vPv,ac:vAc,rv:vRv}[V]||vOv)();FL=new Set();
+ if(V==='nt'&&$('#ntf')){ntList();return}
+ $('#vw').innerHTML=({ov:vOv,keys:renderKeys,mk:vMk,pv:vPv,ac:vAc,rv:vRv,nt:vNt,os:vOs}[V]||vOv)();FL=new Set();if(V==='nt')ntPrev();
  if(keep>=0){const q=$('#fq');if(q){q.focus();q.setSelectionRange(keep,keep)}}}
 /* ── thao tác ── */
 const UN={hour:3600,day:86400,week:604800,month:2592000},UL={hour:'giờ',day:'ngày',week:'tuần',month:'tháng'},acKey=k=>k?(k.length>16?k.slice(0,7)+'…'+k.slice(-4):k):'—';
@@ -6228,6 +6752,7 @@ function cbPrev(){const a=+($('#cba')||{}).value||0,u=$('#cbu').value;CF.ba=a;CF
 async function addT(keys,amount,unit){const j=await api('/api/admin/keys/add-time',{keys,amount,unit});
  if(j.ok){for(const k in j.ket_qua){const r=KEYS.find(x=>x.key===k);if(r)Object.assign(r,j.ket_qua[k])}FL=new Set(Object.keys(j.ket_qua));paint();toast('Đã cộng '+norm(j.giay)+' cho '+j.da_cong+' key'+(j.bo_qua?' (bỏ qua '+j.bo_qua+')':''));return true}toast(j.loi||'Lỗi',1);return false}
 async function act(b){const d=b.dataset,a=d.a,k=d.k,w=d.w,v=d.v;
+  if(a&&a.slice(0,2)==='nt')return ntAct(b);
  if(a==='add'){const ok=await addT([k],+d.h,d.u||'hour'),dl=$('#dg');if(ok&&dl.open&&dl.dataset.k===k)openKey(k);return}
  if(a==='badd')return addT([...SEL],1,'hour');
  if(a==='addc')return openAdd([k]);if(a==='baddc')return openAdd([...SEL]);
@@ -6247,11 +6772,15 @@ async function act(b){const d=b.dataset,a=d.a,k=d.k,w=d.w,v=d.v;
  if(a==='pvrf'){await loadPv();return toast('Đã làm mới')}
  if(a==='pall'){const hs=PV.filter(x=>x.trang_thai==='pending').map(x=>x.hw);const j=await api('/api/admin/panel/approve',{hwids:hs});if(j.ok){await loadPv();toast('Đã duyệt '+j.da_xu_ly+' thiết bị')}else toast(j.loi||'Lỗi',1);return}
  if(['pa','pd','pr','pb','pu'].includes(a)){const M={pa:['approve',''],pd:['deny','Từ chối thiết bị này?'],pr:['remove','Gỡ quyền / xóa thiết bị này?'],pb:['ban','Ban thiết bị VÀ IP của nó khỏi /api/html (báo 404)?'],pu:['unban','Bỏ ban thiết bị + IP? Máy phải xin duyệt lại.']}[a];if(M[1]&&!await ask(M[1],'Xác nhận'))return;const j=await api('/api/admin/panel/'+M[0],{hwid:w});if(j.ok){if(a==='pb')PF='banned';await loadPv();toast('Đã xử lý')}else toast(j.loi||'Lỗi',1);return}
- if(a==='os'){const want=!OS.off;if(!await ask(want?'BẬT off server? Tool ngoài sẽ không nhận được dự đoán; panel đã duyệt vẫn chạy.':'TẮT off server? Tool ngoài dùng lại bình thường.','Xác nhận'))return;const j=await api('/api/admin/offserver',{off:want});if(j.ok){OS=j;paint();toast(want?'Đã BẬT off server':'Đã TẮT off server')}else toast(j.loi||'Lỗi',1);return}
+ if(a==='osgo'){V='os';paint();scrollTo(0,0);return}
+ if(a==='ost'||a==='osg'||a==='osall'){if(!OS)return;
+  if(a==='ost'){const r=OS.tables.find(x=>x.key===v);if(!r)return;const w=!r.off;return osSet({tables:[v],off:w},w?'TẮT server "'+r.ten+'"? Chỉ tool dùng bàn này không lấy được dự đoán; panel đã duyệt vẫn xem được.':'BẬT lại server "'+r.ten+'"? Tool có key sẽ lấy dự đoán bình thường.',w?'Đã TẮT '+r.ten:'Đã BẬT '+r.ten)}
+  if(a==='osg'){const g=OS.games.find(x=>x.key===v);if(!g)return;const w=!g.off;return osSet({games:[v],off:w},w?'TẮT cả game '+g.ten+' (mọi bàn của game)? Chỉ tool của game này bị chặn.':'BẬT lại cả game '+g.ten+'?',w?'Đã TẮT '+g.ten:'Đã BẬT '+g.ten)}
+  const w=v==='1';return osSet({all:true,off:w},w?'TẮT TẤT CẢ các bàn? Mọi tool ngoài sẽ không lấy được dự đoán.':'BẬT lại TẤT CẢ các bàn?',w?'Đã TẮT tất cả':'Đã BẬT tất cả')}
  if(a==='rvrf'){await loadRv();return toast('Đã làm mới')}if(a==='acrf'){await loadAc();return toast('Đã làm mới')}
  if(a==='acs'||a==='acx'){if(!await ask(a==='acs'?'Dừng auto cược tài khoản này?':'Xóa tài khoản này khỏi danh sách?','Xác nhận'))return;const j=await api('/api/admin/cuocstatus/action',{id:v,act:a==='acs'?'stop':'remove'});if(j.ok){$('#dg').close();await loadAc();toast('Xong')}else toast(j.loi||'Lỗi',1);return}
  if(a==='th'){const t=document.documentElement.dataset.t==='d'?'l':'d';document.documentElement.dataset.t=t;try{localStorage.setItem('th',t)}catch(e){}return}
- if(a==='out'){try{await api('/api/admin/logout',{})}catch(e){}S=null;sessionStorage.removeItem('as');NEW=[];return login0()}}
+ if(a==='out'){try{await api('/api/admin/logout',{})}catch(e){}S=null;sessionStorage.removeItem('as');NEW=[];NT=null;return login0()}}
 document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const d=b.dataset;
  if(b.id==='go')return login();if(d.x==='c')return $('#dg').close();
  if(d.v&&b.classList.contains('n')){V=d.v;paint();scrollTo(0,0);return}
@@ -6269,7 +6798,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Enter'&&['k','un'].includes(
 try{document.documentElement.dataset.t=localStorage.getItem('th')||(matchMedia('(prefers-color-scheme:dark)').matches?'d':'l')}catch(e){}
 setInterval(()=>{if(!S||!$('#vw'))return;document.querySelectorAll('[data-l]').forEach(e=>{e.textContent=left(Math.max(0,+e.dataset.l-now()))})},15000);
 setInterval(()=>{if(S&&$('#vw')&&!document.hidden)loadKeys()},60000);
-setInterval(()=>{if(S&&isM()&&$('#vw')&&!document.hidden){loadPv();loadOs();if(V==='ac')loadAc()}},6000);
+setInterval(()=>{if(S&&isM()&&$('#vw')&&!document.hidden){loadPv();loadOs();if(V==='ac')loadAc();if(V==='nt')loadNt()}},6000);
 if(S)boot();else login0();
 </script></body></html>
 """
@@ -6362,6 +6891,9 @@ def api_html_ui():
 @app.route("/api/predictsun")
 @app.route("/api/predict")                        # tên cũ, giữ để tool đang chạy không bị hỏng
 def api_predict():
+    g = _view_guard("sun")
+    if g is not None:
+        return g
     ensure_poller()
     with _state_lock:
         have = _state["result"] is not None
@@ -6378,17 +6910,19 @@ def api_predict():
     return _json(_predict_out(res, err, upd, "sun", "sun", SUN))
 
 
-# TOOL KHÁCH (key người dùng) CHỈ NHẬN ĐÚNG 3 TRƯỜNG: phien (phiên được dự đoán) · du_doan · do_tin_cay.
-# Không còn: ok, phien_truoc, xuc_xac, tong, ket_qua_truoc, tool_dung_sai_10_van, stale, cap_nhat, game, ban, ten_ban, so_van_wr, lich_su...
-# (panel đã duyệt / admin chính vẫn nhận đủ trường như cũ — xem _predict_out)
-_TOOL_OUT_KEYS = ("phien", "du_doan", "do_tin_cay")
+_TOOL_OUT_KEYS = ("ok", "phien", "du_doan", "do_tin_cay", "phien_truoc", "xuc_xac", "tong", "ket_qua_truoc", "tool_dung_sai_10_van", "stale", "cap_nhat", "game", "ban", "ten_ban")
+if _env_bool("SUNVIW_TOOL_SHOW_WRN", False):         # mặc định ẨN so_van_wr (= cỡ cửa sổ WR, tham số thuật toán). Tool cũ cần trường này -> đặt =1
+    _TOOL_OUT_KEYS = _TOOL_OUT_KEYS + ("so_van_wr",)
+_TOOL_HIST_KEYS = ("phien", "du_doan", "ket_qua", "tong", "dung")
 
 
 def _tool_view(out):
-    """Danh sách trắng cho tool khách (key người dùng): CHỈ phien + du_doan + do_tin_cay. Mọi thứ khác bị loại (kể cả ?hist=, ?detail=)."""
+    """Danh sách trắng cho tool khách (key người dùng): chỉ phần đã công bố trong tài liệu API; mọi thứ nội bộ bị loại."""
     o = {k: out[k] for k in _TOOL_OUT_KEYS if k in out}
     if isinstance(o.get("do_tin_cay"), (int, float)):
         o["do_tin_cay"] = int(round(o["do_tin_cay"] / 5.0) * 5)      # làm tròn 5% -> không dùng để dò ngược WR từng logic
+    if "lich_su" in out:
+        o["lich_su"] = [{k: r.get(k) for k in _TOOL_HIST_KEYS} for r in out["lich_su"]]
     return o
 
 
@@ -6402,8 +6936,8 @@ def _predict_out(res, err, upd, game, hc_key, cfg, extra=None):
     if err:
         out["loi"] = err
     out["cap_nhat"] = upd
-    if offsrv_state()["off"]:
-        out["off_server"] = True                     # chỉ xuất hiện khi OFF SERVER bật (lúc đó chỉ panel / admin mới nhận được JSON này) -> panel hiện badge
+    if offsrv_table_off(hc_key):
+        out["off_server"] = True                     # chỉ xuất hiện khi bàn này OFF SERVER (lúc đó chỉ panel / admin mới nhận được JSON này) -> panel hiện badge
     hist_rows, detail = res["hist"], res["detail"]
     hide = hist_hidden_upto(hc_key)               # đã bấm "Xóa lịch sử" -> chỉ ẩn khỏi phần hiển thị; WR / AF / vote logic vẫn đọc đủ dữ liệu cũ
     if hide:
@@ -6422,7 +6956,10 @@ def _predict_out(res, err, upd, game, hc_key, cfg, extra=None):
 
 
 def _hit_predict(tb):
-    """Handler chung của 2 bàn HITCLUB (cùng cấu trúc JSON với /api/predictsun, game="hitclub", thêm ban / ten_ban)."""
+    """Handler chung của các bàn HITCLUB + LC (cùng cấu trúc JSON với /api/predictsun, thêm ban / ten_ban)."""
+    g = _view_guard(tb.key)                       # lớp phòng thủ nằm TRONG view: key / đúng bàn / bàn không OFF (xem khối OFF SERVER)
+    if g is not None:
+        return g
     ensure_poller()
     if not tb.active:
         return _json({"ok": False, "game": tb.game, "ban": tb.key, "loi": _pub_err("ban dang tat (HITCLUB=0 / LC_ENABLED=0 / ENABLED=False)", "ban dang tat")}, 503)
@@ -6609,7 +7146,7 @@ def health():
                      mode_min=AF_MODE_MIN, mode_below=AF_MODE_BELOW, be_che_do=AF_MODE_FLIP, be_final_af=AF_FLIP_FINAL,
                      be_final_cao_thap=AF_FLIP_FINAL_CT, be_final_cao=AF_FLIP_FINAL_CAO, be_final_thap=AF_FLIP_FINAL_THAP, be_final_all=AF_FLIP_FINAL_ALL),
              xoa_lich_su=dict(bat=HIST_CLEAR_ENABLED, sun_an_den_phien=hist_hidden_upto("sun")),
-             ips=ip_health(), panel_duyet=panel_health(), off_server=offsrv_state()["off"],
+             ips=ip_health(), panel_duyet=panel_health(), off_server={k: v["off"] for k, v in offsrv_state()["tables"].items()}, tu_kiem_tra_bao_mat=_SELFCHECK or "ok",
              luu_tru=dict(thu_muc=DATA_DIR, ben=DATA_PERSISTENT, tren_railway=ON_RAILWAY, file_key=KEYS_PATH, key_tinh_han_tu_kich_hoat=KEY_START_ON_ACTIVATE,
                           khoi_dong_dau=BOOT_INFO.get("first"), so_lan_khoi_dong=BOOT_INFO.get("count"),
                           canh_bao=(None if DATA_PERSISTENT else "Dang chay tren Railway nhung CHUA co Volume -> key / lich su game se MAT sau moi lan deploy. Gan Volume (mount path /data) cho service.")))
@@ -6623,7 +7160,8 @@ def health():
 #  🤖  AUTO CƯỢC + AUTO RÚT LC79  (tách từ bot_lc79_v25.py — bản WEB, không còn Telegram)
 # ═══════════════════════════════════════════════════════════════════════════
 #   Trang điều khiển:  GET /tool/autocuoc   (cùng cơ chế DUYỆT THIẾT BỊ như /api/html: máy lạ thấy bảng "đang chờ admin duyệt")
-#   Nguồn dự đoán:    bàn LC MD5 (HIT_TABLES["lcmd5"]) — dùng ĐÚNG dự đoán final mà /api/predictlcmd5 đang trả.
+#   Nguồn dự đoán:    2 BÀN — LC MD5 (HIT_TABLES["lcmd5"], WS wss://wtxmd52.tele68.com/txmd5/ · namespace /txmd5) và LC HŨ (HIT_TABLES["lchu"], WS wss://wtx.tele68.com/tx/ · namespace /tx) — dùng ĐÚNG dự đoán final mà /api/predictlcmd5 · /api/predictlchu đang trả.
+#   MỖI BÀN = 1 PHIÊN RIÊNG của tài khoản: config riêng (cược gốc · thua x2 · giảm cược · pause · mục tiêu lãi / tự rút...), sổ cược + biểu đồ riêng, WebSocket riêng, bật / tắt độc lập. 1 lần đăng nhập tạo đủ 2 bàn; MD5 và Hũ dùng chung 1 ví.
 #                     Mỗi phiên mới có dự đoán (tb.pending) -> đặt cược tự động · khi API trả kết quả phiên đó -> chấm thắng/thua rồi tính tiền cược phiên kế.
 #   Mỗi tài khoản LC79 = 1 phiên auto cược chạy luồng riêng (nhiều tài khoản chạy song song). Tất cả tính năng bật / tắt ngay trên trang, đổi khi đang chạy cũng được:
 #     · Khi THUA: giữ nguyên / reset về gốc / x2 (Martingale)  ·  x2 sau chuỗi N ván thua (một lần)  ·  giảm cược sau N ván thua liên tiếp
@@ -6814,6 +7352,24 @@ AB_BET_URLS = [_AB_BET_URL_ENV] if _AB_BET_URL_ENV else [      # URL POST cượ
     "https://wlb.tele68.com/v1/txmd5/bet",
 ]
 AB_BET_URL = AB_BET_URLS[0]
+
+# ── 2 BÀN CƯỢC: MD5 (namespace /txmd5) + HŨ (namespace /tx) — mỗi bàn 1 phiên auto cược RIÊNG (WS riêng · config riêng · sổ cược riêng) ──
+#   Bàn HŨ:  wss://wtx.tele68.com/tx/?EIO=4&transport=websocket   (copy từ DevTools)
+#            nghe  42/tx,["tick-update", {id, tick, subTick, state: "BETTING", ...}]   · cược  42/tx,<ack>["bet", {"type": "TAI"|"XIU", "amount": 1000}]
+#   Env bàn HŨ:  AUTOBET_HU_WS_URL · AUTOBET_HU_WS_NS (mặc định /tx) · AUTOBET_HU_BET_URL (URL POST dự phòng khi WS hỏng)
+_AB_HU_WS_URL_ENV = os.environ.get("AUTOBET_HU_WS_URL", "").strip()
+_AB_HU_BET_URL_ENV = os.environ.get("AUTOBET_HU_BET_URL", "").strip()
+AB_TABLES = {
+    "lcmd5": {"label": "LC MD5", "short": "MD5", "ws_urls": AB_WS_URLS, "ns": AB_WS_NS, "bet_urls": AB_BET_URLS},
+    "lchu": {"label": "LC Hũ", "short": "HŨ",
+             "ws_urls": [_AB_HU_WS_URL_ENV] if _AB_HU_WS_URL_ENV else [
+                 "wss://wtx.tele68.com/tx/?EIO=4&transport=websocket",
+                 "wss://wtx.tele68.com/tx/?EIO=4&transport=websocket&cp=R&cl=R&pf=web",
+             ],
+             "ns": os.environ.get("AUTOBET_HU_WS_NS", "/tx"),
+             "bet_urls": [_AB_HU_BET_URL_ENV] if _AB_HU_BET_URL_ENV else ["https://wtx.tele68.com/v1/tx/bet"]},
+}
+AB_TABLE_KEYS = tuple(AB_TABLES)
 AB_BET_MODE = os.environ.get("AUTOBET_BET_MODE", "ws").strip().lower()   # "ws" (mặc định): WS khoẻ + state BETTING -> emit event "bet" qua WS (như bản gốc), WS hỏng -> POST HTTP · "http": luôn POST HTTP
 AB_BET_TIMEOUT = 8.0
 AB_WS_STALE = 15.0          # quá N giây không nhận tick-update -> coi như mất đồng bộ
@@ -6828,11 +7384,13 @@ def _ab_url_host(u):
 
 
 class AbWs:
-    """Kết nối Socket.IO (Engine.IO v4) tới namespace /txmd5 cho 1 tài khoản: NGHE tick-update (state) để biết lúc nào mở cược.
+    """Kết nối Socket.IO (Engine.IO v4) tới namespace của BÀN (/txmd5 cho MD5 · /tx cho HŨ) cho 1 phiên: NGHE tick-update (state) để biết lúc nào mở cược.
     Lỗi kết nối được ghi thẳng vào nhật ký phiên (không còn im lặng); nối lỗi thì tự thử URL kế tiếp / vào namespace không kèm token."""
 
     def __init__(self, sess):
         self.sess = sess
+        self.t = AB_TABLES.get(getattr(sess, "table", "lcmd5")) or AB_TABLES["lcmd5"]   # cấu hình WS của bàn (url · namespace · url cược dự phòng)
+        self.ns = self.t["ns"]
         self.ws = None
         self.stop_flag = False
         self.connected = False          # đã vào namespace
@@ -6928,15 +7486,15 @@ class AbWs:
     def _bet_http(self, side, amount):
         """POST HTTP dự phòng. Chỉ khi 404 (sai đường dẫn) mới thử URL kế. Lỗi mạng / timeout -> ném exception."""
         last = (False, 0, "")
-        n = len(AB_BET_URLS)
+        n = len(self.t["bet_urls"])
         for k in range(n):
             i = (self._bet_url_i + k) % n
-            st, _js, raw = _ab_req("POST", AB_BET_URLS[i], AB_P, jwt=self.sess.jwt,
+            st, _js, raw = _ab_req("POST", self.t["bet_urls"][i], AB_P, jwt=self.sess.jwt,
                                    body={"type": side, "amount": int(amount)}, timeout=AB_BET_TIMEOUT)
             if st in (200, 201):
                 self._bet_url_i = i
                 return True, st, raw[:120]
-            last = (False, st, f"HTTP {st} {_ab_url_host(AB_BET_URLS[i])}: {raw[:100]}")
+            last = (False, st, f"HTTP {st} {_ab_url_host(self.t["bet_urls"][i])}: {raw[:100]}")
             if st != 404:
                 break
         return last
@@ -6956,7 +7514,7 @@ class AbWs:
             self._log_once("info", "Cược KHÔNG theo state WS (WS chưa nghe được) — POST HTTP ngay khi có dự đoán", every=300.0)
         if ws_mode and AB_BET_MODE != "http" and not self._noauth and self.ws is not None:
             self._ack_id += 1
-            pkt = "42" + AB_WS_NS + "," + str(self._ack_id) + json.dumps(["bet", {"type": side, "amount": int(amount)}], separators=(",", ":"))
+            pkt = "42" + self.ns + "," + str(self._ack_id) + json.dumps(["bet", {"type": side, "amount": int(amount)}], separators=(",", ":"))
             try:
                 self.ws.send(pkt)
             except Exception as e:  # noqa: BLE001 - chưa gửi được -> thử HTTP ngay
@@ -6984,7 +7542,7 @@ class AbWs:
         while not self.stop_flag and self.sess.alive:
             self.connected = False
             self._tick_logged = False
-            url = AB_WS_URLS[self._url_i % len(AB_WS_URLS)]
+            url = self.t["ws_urls"][self._url_i % len(self.t["ws_urls"])]
             tick_before = self.last_tick_t
             self._t_conn = time.time()
             try:
@@ -7005,7 +7563,7 @@ class AbWs:
             else:                                                          # chưa nhận tick nào -> thử URL kế; hết vòng URL thì đổi kiểu auth
                 fails += 1
                 self._url_i += 1
-                if self._url_i % len(AB_WS_URLS) == 0:
+                if self._url_i % len(self.t["ws_urls"]) == 0:
                     self._noauth = not self._noauth
             time.sleep(min(2.0 + fails, 10.0))                             # nối lại
 
@@ -7030,21 +7588,21 @@ class AbWs:
         t = msg[0]
         if t == "0":                                                        # Engine.IO open -> vào namespace (kèm token, hoặc không kèm khi _noauth)
             if self._noauth:
-                ws.send("40" + AB_WS_NS + ",")
+                ws.send("40" + self.ns + ",")
             else:
                 auth = os.environ.get("AUTOBET_WS_AUTH")
                 try:
                     auth = json.loads(auth.replace("<jwt>", self.sess.jwt)) if auth else {"token": self.sess.jwt}
                 except ValueError:
                     auth = {"token": self.sess.jwt}
-                ws.send("40" + AB_WS_NS + "," + json.dumps(auth, separators=(",", ":")))
+                ws.send("40" + self.ns + "," + json.dumps(auth, separators=(",", ":")))
         elif t == "2":                                                      # ping -> pong
             ws.send("3")
         elif msg.startswith("40"):                                          # đã vào namespace (hoặc namespace mặc định)
-            if msg.startswith("40" + AB_WS_NS) or msg.startswith("40{") or msg == "40":
+            if msg.startswith("40" + self.ns) or msg.startswith("40{") or msg == "40":
                 self.connected = True
                 self.last_err = ""
-                self._log_once("info", f"WS đã vào namespace {AB_WS_NS}", every=600.0)
+                self._log_once("info", f"WS đã vào namespace {self.ns}", every=600.0)
         elif msg.startswith("44"):                                          # connect_error -> đóng để thử lại (đổi kiểu auth)
             self.connected = False
             self.last_err = "namespace từ chối: " + msg[:100]
@@ -7055,13 +7613,13 @@ class AbWs:
                 pass
         elif msg.startswith("43"):                                          # ack của event ta gửi (bet) -> ghi lại để biết server trả lời gì
             body = msg[2:]
-            if body.startswith(AB_WS_NS + ","):
-                body = body[len(AB_WS_NS) + 1:]
+            if body.startswith(self.ns + ","):
+                body = body[len(self.ns) + 1:]
             self.sess.log("info", f"Server trả lời cược: {body[:150]}")
         elif msg.startswith("42"):
             body = msg[2:]
-            if body.startswith(AB_WS_NS + ","):
-                body = body[len(AB_WS_NS) + 1:]
+            if body.startswith(self.ns + ","):
+                body = body[len(self.ns) + 1:]
             body = body.lstrip("0123456789")
             try:
                 ev = json.loads(body)
@@ -7265,11 +7823,12 @@ class AbLedger:
         self.w = self.l = 0
         self.withdrawn = 0
         self.staked = 0         # tổng tiền đã đặt cược (cộng dồn, không bị cắt như series)
+        self.pnl = 0            # lãi/lỗ cộng dồn của CHÍNH bàn này (2 bàn MD5 + Hũ dùng chung 1 ví -> không suy lãi/lỗ từ số dư được)
         self.series = []        # mỗi ván đã chấm: {r, t, phien, side, res, amount, pnl, win, net, bal}
         self.t0 = time.time()
 
     def net(self):
-        return self.balance + self.withdrawn - self.start_bal       # cộng tiền đã rút để lãi/lỗ không tụt khi rút
+        return self.pnl                                             # lãi/lỗ riêng của bàn này (rút tiền không làm tụt)
 
     def bet(self, side, amount, phien):
         self.balance -= amount
@@ -7288,6 +7847,7 @@ class AbLedger:
             self.w += 1
         else:
             self.l += 1
+        self.pnl += e["pnl"]
         pt = dict(e)
         pt["t"] = int(time.time())
         pt["net"] = self.net()
@@ -7299,7 +7859,7 @@ class AbLedger:
 
     def to_dict(self):
         return {"balance": self.balance, "start_bal": self.start_bal, "nick": self.nick, "rounds": self.rounds,
-                "w": self.w, "l": self.l, "withdrawn": self.withdrawn, "staked": self.staked, "series": self.series, "t0": self.t0}
+                "w": self.w, "l": self.l, "withdrawn": self.withdrawn, "staked": self.staked, "series": self.series, "t0": self.t0, "pnl_total": self.pnl}
 
     @classmethod
     def from_dict(cls, d):
@@ -7310,6 +7870,7 @@ class AbLedger:
         o.series = [x for x in (d.get("series") or []) if isinstance(x, dict)][-AB_SERIES_KEEP:]
         o.staked = int(d.get("staked") or sum(int(x.get("amount") or 0) for x in o.series))
         o.t0 = d.get("t0") or time.time()
+        o.pnl = int(d["pnl_total"]) if d.get("pnl_total") is not None else (o.balance + o.withdrawn - o.start_bal)   # phiên lưu từ bản cũ: giữ đúng lãi/lỗ đang có
         return o
 
 
@@ -7319,8 +7880,10 @@ _ab_leader = {"ok": None, "fd": None}
 _ab_save_t = {"t": 0.0}
 
 
-def ab_sid(username):
-    return hashlib.sha1(username.strip().lower().encode("utf-8")).hexdigest()[:10]
+def ab_sid(username, table="lcmd5"):
+    """id phiên = hash(username) (+ hậu tố bàn). Bàn MD5 giữ NGUYÊN id cũ để phiên đã lưu từ bản trước vẫn nhận ra."""
+    base = hashlib.sha1(username.strip().lower().encode("utf-8")).hexdigest()[:10]
+    return base if table == "lcmd5" else base + "_" + table[2:]
 
 
 def _ab_owner_valid(owner):
@@ -7335,11 +7898,34 @@ def _ab_owner_valid(owner):
         return True
 
 
-class AbSession:
-    """1 tài khoản LC79 đang auto cược. Toàn bộ logic thắng/thua/x2/giảm/pause ported nguyên từ AutoBetSession của bot."""
+def _ab_siblings(s):
+    """Các phiên của CÙNG tài khoản + CÙNG key nhưng ở bàn khác (MD5 <-> Hũ)."""
+    u = (s.username or "").strip().lower()
+    with _ab_lock:
+        return [x for x in _ab_sessions.values() if x is not s and (x.username or "").strip().lower() == u and x.owner == s.owner]
 
-    def __init__(self, username, password, jwt, balance, nick):
-        self.sid = ab_sid(username)
+
+def _ab_ensure_pair(s):
+    """Đảm bảo tài khoản có đủ phiên cho CẢ 2 bàn (phiên lưu từ bản cũ chỉ có MD5 -> tự thêm phiên Hũ, config mặc định, chưa chạy)."""
+    with _ab_lock:
+        for t in AB_TABLE_KEYS:
+            sid = ab_sid(s.username, t)
+            if sid in _ab_sessions:
+                continue
+            n = AbSession(s.username, s.password, s.jwt, s.ledger.balance, s.nick, t)
+            n.owner = s.owner
+            n.stop_reason = "ready"
+            _ab_sessions[sid] = n
+
+
+class AbSession:
+    """1 tài khoản LC79 đang auto cược trên 1 BÀN (MD5 hoặc Hũ). Toàn bộ logic thắng/thua/x2/giảm/pause ported nguyên từ AutoBetSession của bot."""
+
+    _off_noted = False                                                     # đã ghi nhật ký "server đang OFF" chưa (bàn nguồn OFF SERVER)
+
+    def __init__(self, username, password, jwt, balance, nick, table="lcmd5"):
+        self.table = table if table in AB_TABLES else "lcmd5"       # BÀN của phiên này: "lcmd5" (MD5) | "lchu" (Hũ) — mỗi bàn 1 phiên riêng: cfg · sổ cược · WS riêng
+        self.sid = ab_sid(username, self.table)
         self.username, self.password, self.jwt, self.nick = username, password, jwt, nick
         self.cfg = dict(AB_CFG_DEFAULT)
         self.ledger = AbLedger(balance, nick)
@@ -7362,7 +7948,7 @@ class AbSession:
         self._login_money = None           # số dư lấy từ lần đăng nhập lại gần nhất (dự phòng khi API số dư không đọc được)
         self._jwt_chk = 0.0                # lần cuối kiểm tra hạn JWT
         self.thread = None
-        self.ws = AbWs(self)               # WebSocket cược (Socket.IO /txmd5)
+        self.ws = AbWs(self)               # WebSocket cược của bàn (Socket.IO /txmd5 hoặc /tx)
         self.owner = ""                    # key AUTO CƯỢC LC sở hữu phiên này ("" = phiên cũ tạo trước bản có key)
 
     def reset_state(self):
@@ -7504,7 +8090,7 @@ class AbSession:
             self.thread = threading.Thread(target=self._run, daemon=True, name=f"autobet-{self.sid}")
             self.thread.start()
             self.ws.start()
-        self.log("info", "Bắt đầu auto cược")
+        self.log("info", f"Bắt đầu auto cược bàn {self.tlabel}")
         ab_save(force=True)
 
     def stop(self, reason="stopped", msg=None):
@@ -7547,8 +8133,12 @@ class AbSession:
                 self.log("error", f"Lỗi nội bộ: {type(e).__name__}: {e}")
             time.sleep(AB_TICK)
 
+    @property
+    def tlabel(self):
+        return AB_TABLES[self.table]["label"]
+
     def _feed(self):
-        tb = HIT_TABLES.get(AB_FEED_KEY)
+        tb = HIT_TABLES.get(self.table)
         if tb is None or not tb.active:
             return None, 0, None
         pend = tb.pending if isinstance(tb.pending, dict) else None
@@ -7556,6 +8146,8 @@ class AbSession:
             latest = max(tb.hist) if tb.hist else 0
         except ValueError:
             latest = 0
+        if offsrv_table_off(self.table):                                   # bàn nguồn đang OFF SERVER -> auto cược KHÔNG nhận dự đoán mới (ván đang mở vẫn được chấm theo tb.hist)
+            pend = None
         return tb, latest, (dict(pend) if pend else None)
 
     def _tick(self):
@@ -7586,6 +8178,12 @@ class AbSession:
             return
         if not self.alive or self.hold:
             return
+        if offsrv_table_off(self.table):                                   # server của bàn đang OFF -> không đặt cược mới, báo 1 lần vào nhật ký; bật lại là tự chạy tiếp
+            if not self._off_noted:
+                self._off_noted = True
+                self.log("warn", f"Server {OFFSRV_LABEL.get(self.table, self.table)} đang OFF — tạm ngừng đặt cược mới, tự chạy tiếp khi server bật lại")
+            return
+        self._off_noted = False
         if not pend or pend["phien"] <= latest or pend["phien"] <= self.last_phien:        # 2) phiên mới có dự đoán -> đặt cược
             return
         phien = pend["phien"]
@@ -7692,6 +8290,12 @@ class AbSession:
                 self.ws.restart()
             except Exception:  # noqa: BLE001
                 pass
+            for sib in _ab_siblings(self):                                 # bàn còn lại của cùng tài khoản dùng chung JWT mới (không đăng nhập đá nhau)
+                sib.jwt, sib._login_money = jwt, bal
+                try:
+                    sib.ws.restart()
+                except Exception:  # noqa: BLE001
+                    pass
             return True
         return False
 
@@ -7794,6 +8398,7 @@ class AbSession:
         o = self.open
         d = {
             "id": self.sid, "username": self.username, "nick": self.nick, "status": self.status(), "alive": self.alive, "hold": self.hold,
+            "table": self.table, "table_label": self.tlabel, "table_short": AB_TABLES[self.table]["short"],
             "paused": self.paused, "balance": L.balance, "start_bal": L.start_bal, "net": n, "rounds": L.rounds, "w": L.w, "l": L.l,
             "wr": round(L.w / (L.w + L.l) * 100, 1) if (L.w + L.l) else None,
             "bet": self.current_bet, "base_bet": self.base_bet, "withdrawn": L.withdrawn, "wd_count": self.wd_count,
@@ -7810,7 +8415,7 @@ class AbSession:
         return d
 
     def dump(self):
-        d = {"username": self.username, "nick": self.nick, "cfg": self.cfg, "ledger": self.ledger.to_dict(), "alive": self.alive,
+        d = {"username": self.username, "table": self.table, "nick": self.nick, "cfg": self.cfg, "ledger": self.ledger.to_dict(), "alive": self.alive,
              "hold": self.hold, "owner": self.owner, "stop_reason": self.stop_reason, "wd_count": self.wd_count, "logs": self.logs[-AB_LOG_KEEP:],
              "state": {"current_bet": self.current_bet, "loss_streak": self.loss_streak, "win_streak": self.win_streak,
                        "recovery_wins": self.recovery_wins, "paused": self.paused, "reduced": self._is_reduced,
@@ -7894,7 +8499,9 @@ def ab_boot():
             u = str(d.get("username") or "")
             if not u:
                 continue
-            s = AbSession(u, _ab_decrypt(d.get("pw_enc") or ""), d.get("jwt") or "", 0, d.get("nick") or u)
+            tbl = str(d.get("table") or "lcmd5")
+            tbl = tbl if tbl in AB_TABLES else "lcmd5"                     # phiên lưu từ bản cũ không có "table" -> MD5
+            s = AbSession(u, _ab_decrypt(d.get("pw_enc") or ""), d.get("jwt") or "", 0, d.get("nick") or u, tbl)
             s.cfg = ab_clean_cfg(d.get("cfg") or {}, AB_CFG_DEFAULT) if d.get("cfg") else s.cfg
             s.ledger = AbLedger.from_dict(d.get("ledger") or {})
             s.logs = [x for x in (d.get("logs") or []) if isinstance(x, dict)][-AB_LOG_KEEP:]
@@ -7924,6 +8531,12 @@ def ab_boot():
                 s.log("warn", "Server đã khởi động lại — auto cược dừng, cần đăng nhập lại để chạy tiếp")
         except Exception:  # noqa: BLE001
             continue
+    with _ab_lock:
+        for s0 in list(_ab_sessions.values()):                             # phiên cũ chỉ có MD5 -> thêm phiên Hũ (chưa chạy)
+            try:
+                _ab_ensure_pair(s0)
+            except Exception:  # noqa: BLE001
+                pass
 
 
 # ── Trang + API ──
@@ -7960,7 +8573,8 @@ def _ab_owner():
     return getattr(flask_g, "ab_key", "")
 
 
-def _ab_feed_view():
+def _ab_feed_view(table="lcmd5"):
+    AB_FEED_KEY = table if table in AB_TABLES else "lcmd5"
     tb = HIT_TABLES.get(AB_FEED_KEY)
     if tb is None:
         return {"ok": False}
@@ -7972,7 +8586,11 @@ def _ab_feed_view():
     with tb.slock:
         err = tb.state.get("error")
     last = tb.hist.get(latest) if latest else None
-    return {"ok": bool(tb.active and not err), "ban": tb.label, "loi": ("nguon du doan tam thoi loi" if err else None),
+    if offsrv_table_off(AB_FEED_KEY):                                      # bàn nguồn OFF SERVER -> trang auto cược KHÔNG thấy dự đoán
+        pend = None
+    return {"ok": bool(tb.active and not err and not offsrv_table_off(AB_FEED_KEY)), "ban": tb.label,
+            "loi": ("server dang OFF" if offsrv_table_off(AB_FEED_KEY) else ("nguon du doan tam thoi loi" if err else None)),
+            "off_server": offsrv_table_off(AB_FEED_KEY) or None,
             "phien": pend["phien"] if pend and pend["phien"] > latest else None,
             "du_doan": pend["du_doan"] if pend and pend["phien"] > latest else None,
             "phien_truoc": latest or None, "ket_qua_truoc": last["actual"] if last else None,
@@ -8018,10 +8636,17 @@ def tool_autocuoc_state():
     own = _ab_owner()
     with _ab_lock:
         sess = [s for s in _ab_sessions.values() if s.owner == own]          # mỗi key chỉ thấy tài khoản của chính mình
+    for s0 in list(sess):
+        _ab_ensure_pair(s0)                                                 # mỗi tài khoản luôn có đủ 2 bàn (MD5 + Hũ)
+    with _ab_lock:
+        sess = [s for s in _ab_sessions.values() if s.owner == own]
     sel = _ab_get(request.args.get("id", ""))
     if sel is None and sess:
         sel = next((s for s in sess if s.alive), sess[0])
-    return _json({"ok": True, "feed": _ab_feed_view(), "sessions": [s.view() for s in sess],
+    feeds = {t: _ab_feed_view(t) for t in AB_TABLE_KEYS}
+    return _json({"ok": True, "feed": feeds[sel.table if sel else "lcmd5"], "feeds": feeds,
+                  "tables": {t: {"label": AB_TABLES[t]["label"], "short": AB_TABLES[t]["short"]} for t in AB_TABLE_KEYS},
+                  "sessions": [s.view() for s in sess],
                   "selected": sel.view(full=True) if sel else None,
                   "luu_mk": AB_SAVE_PW, "multi": AB_MULTI,
                   "wd_limits": {"momo": [AB_MOMO_MIN, AB_MOMO_MAX], "bank": [AB_BANK_MIN, AB_BANK_MAX]}})
@@ -8036,34 +8661,42 @@ def tool_autocuoc_login():
     u, p = str(b.get("username") or "").strip()[:60], str(b.get("password") or "")[:120]
     if not u or not p:
         return _json({"ok": False, "loi": "Nhập tên đăng nhập và mật khẩu LC79"}, 400)
-    sid = ab_sid(u)
     owner = _ab_owner()
     with _ab_lock:
-        cur = _ab_sessions.get(sid)
-        if cur is not None and cur.owner and cur.owner != owner:
-            if cur.alive:
+        group = [x for x in (_ab_sessions.get(ab_sid(u, t)) for t in AB_TABLE_KEYS) if x is not None]
+        foreign = [x for x in group if x.owner and x.owner != owner]
+        if foreign:
+            if any(x.alive for x in foreign):
                 return _json({"ok": False, "loi": "Tài khoản LC79 này đang được key khác dùng để auto cược."}, 409)
-            cur = None                                       # phiên cũ của key khác đã dừng -> bắt đầu phiên mới (không lộ lịch sử cũ)
-        if cur is None and sid not in _ab_sessions and len(_ab_sessions) >= AB_MAX_SESSIONS:
+            for x in foreign:                                  # phiên cũ của key khác đã dừng -> bắt đầu phiên mới (không lộ lịch sử cũ)
+                _ab_sessions.pop(x.sid, None)
+            group = [x for x in group if x not in foreign]
+        if not group and len(_ab_sessions) >= AB_MAX_SESSIONS * len(AB_TABLE_KEYS):
             return _json({"ok": False, "loi": f"Tối đa {AB_MAX_SESSIONS} tài khoản"}, 400)
-    if cur is not None and cur.alive:
-        return _json({"ok": False, "loi": "Tài khoản này đang chạy auto cược — chọn nó ở danh sách bên trái."}, 409)
     jwt, bal, nick, err = ab_login(u, p)
     if not jwt:
         if "Không kết nối" in str(err):                      # LC79 không phản hồi (KHÔNG phải sai mật khẩu)
             return _json({"ok": False, "sai_tk": False, "loi": err}, 502)
         return _json({"ok": False, "sai_tk": True, "loi": "Sai tài khoản hoặc mật khẩu"}, 400)   # KHÔNG dùng 401: 401 = key hỏng -> giao diện bị đá về màn nhập key
+    tables = {}
     with _ab_lock:
-        if cur is None:
-            cur = AbSession(u, p, jwt, bal, nick)
-            _ab_sessions[sid] = cur
-        else:
-            cur.password, cur.jwt, cur.nick, cur.ledger.nick = p, jwt, nick, nick
-            cur.ledger.balance = bal                         # bắt đầu lại / chạy tiếp: số dư thật hiện tại
-        cur.stop_reason = "ready" if not cur.ledger.rounds else cur.stop_reason
-        cur.owner = owner
+        for t in AB_TABLE_KEYS:                              # 1 lần đăng nhập -> đủ phiên cho CẢ 2 bàn (mỗi bàn config + sổ cược riêng)
+            sid_t = ab_sid(u, t)
+            cur = _ab_sessions.get(sid_t)
+            if cur is None:
+                cur = AbSession(u, p, jwt, bal, nick, t)
+                _ab_sessions[sid_t] = cur
+            else:
+                cur.password, cur.jwt, cur.nick, cur.ledger.nick = p, jwt, nick, nick
+                if not cur.alive:
+                    cur.ledger.balance = bal                 # bắt đầu lại / chạy tiếp: số dư thật hiện tại (bàn đang chạy thì để nó tự đồng bộ)
+            if not cur.alive and not cur.ledger.rounds:
+                cur.stop_reason = "ready"
+            cur.owner = owner
+            tables[t] = {"id": sid_t, "label": AB_TABLES[t]["label"], "cfg": cur.cfg, "co_lich_su": cur.ledger.rounds > 0, "alive": cur.alive}
     ab_save(force=True)
-    return _json({"ok": True, "id": sid, "nick": nick, "balance": bal, "co_lich_su": cur.ledger.rounds > 0, "cfg": cur.cfg})
+    m5 = tables["lcmd5"]
+    return _json({"ok": True, "id": m5["id"], "nick": nick, "balance": bal, "co_lich_su": m5["co_lich_su"], "cfg": m5["cfg"], "tables": tables})
 
 
 @app.route("/tool/autocuoc/api/start", methods=["POST"])
@@ -8139,10 +8772,12 @@ def tool_autocuoc_action():
     elif act == "stop":
         s.stop("stopped", "Đã dừng auto cược")
     elif act == "remove":
-        if s.alive:
-            return _json({"ok": False, "loi": "Dừng auto cược trước khi xoá"}, 409)
+        grp = [s] + _ab_siblings(s)                          # xoá tài khoản = xoá cả 2 bàn (MD5 + Hũ)
+        if any(x.alive for x in grp):
+            return _json({"ok": False, "loi": "Dừng auto cược cả 2 bàn trước khi xoá tài khoản"}, 409)
         with _ab_lock:
-            _ab_sessions.pop(s.sid, None)
+            for x in grp:
+                _ab_sessions.pop(x.sid, None)
     else:
         return _json({"ok": False, "loi": "Lệnh không hợp lệ"}, 400)
     ab_save(force=True)
@@ -8172,13 +8807,13 @@ def _ab_mask(s, keep=4):
     return ("•" * max(0, len(s) - keep) + s[-keep:]) if s else ""
 
 
-def ab_strategy(cfg):
+def ab_strategy(cfg, label="LC MD5"):
     """Mô tả CHIẾN THUẬT cược từ cấu hình -> {"ten": tên ngắn, "dong": [các dòng mô tả]} (hiện ở hồ sơ tài khoản trên trang admin)."""
     c = cfg or {}
     gi = lambda k, d=0: int(c.get(k) or d)
     lm, wm = c.get("loss_mode", "keep"), c.get("win_mode", "keep")
     act = {"keep": "giữ nguyên mức cược", "reset": "về cược gốc", "x2": "nhân đôi cược"}
-    dong = [f"Cược gốc {gi('bet'):,} / ván — theo dự đoán bàn LC MD5"]
+    dong = [f"Cược gốc {gi('bet'):,} / ván — theo dự đoán bàn {label}"]
     dong.append("Khi THUA → " + act.get(lm, str(lm)) + (" (gấp thếp / Martingale)" if lm == "x2" else ""))
     if wm == "x2":
         dong.append(f"Khi THẮNG → nhân đôi sau {gi('win_x2_streak', 1)} ván thắng liên tiếp" + (" · giữ x2 tới khi thua" if c.get("win_x2_keep") else " · thắng 1 ván x2 xong về cược gốc"))
@@ -8217,9 +8852,9 @@ def _ab_admin_view(s):
     c["wd_number"] = _ab_mask(c.get("wd_number"))
     c.pop("wd_name", None)
     tong = L.w + L.l
-    st = ab_strategy(s.cfg)
+    st = ab_strategy(s.cfg, s.tlabel)
     return {
-        "id": s.sid, "username": s.username, "nick": s.nick or s.username, "owner": s.owner or "",
+        "id": s.sid, "table": s.table, "ban": s.tlabel, "username": s.username, "nick": s.nick or s.username, "owner": s.owner or "",
         "status": s.status(), "alive": s.alive, "hold": s.hold, "paused": s.paused,
         "balance": L.balance, "start_bal": L.start_bal, "net": L.net(), "withdrawn": L.withdrawn, "wd_count": s.wd_count,
         "rounds": L.rounds, "wins": L.w, "losses": L.l, "wr": round(L.w / tong * 100, 1) if tong else None,
@@ -8275,10 +8910,11 @@ def api_admin_cuocstatus_action():
         if ss.alive:
             ss.stop("stopped", "Admin đã dừng auto cược")
     elif act == "remove":
-        if ss.alive:
-            ss.stop("stopped", "Admin đã xoá tài khoản")
-        with _ab_lock:
-            _ab_sessions.pop(sid, None)
+        for x in [ss] + _ab_siblings(ss):                      # xoá tài khoản = xoá cả 2 bàn
+            if x.alive:
+                x.stop("stopped", "Admin đã xoá tài khoản")
+            with _ab_lock:
+                _ab_sessions.pop(x.sid, None)
     else:
         return _json({"ok": False, "loi": "Lệnh không hợp lệ"}, 400)
     ab_save(force=True)
@@ -8301,217 +8937,240 @@ AB_HTML = r"""<!doctype html>
 <title>Auto cược LC79</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800;900&family=Orbitron:wght@600;800;900&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#0a1417; --bg2:#0e1b1f; --surf:#12242a; --surf2:#183039; --line:#21393f; --line2:#2b4950;
-  --tx:#e7f0ec; --mut:#82999a; --dim:#5c7377;
-  --up:#5de0b2; --up2:rgba(93,224,178,.16); --dn:#ff7070; --dn2:rgba(255,112,112,.16);
-  --gold:#e9c46a; --gold2:rgba(233,196,106,.14); --sky:#79b8ff;
-  --r:14px; color-scheme:dark;
+  --bg:#07041c; --card:#140b3a; --bg2:rgba(24,14,66,.74); --surf:rgba(38,24,96,.82); --surf2:rgba(70,44,160,.5);
+  --line:rgba(160,130,255,.24); --line2:rgba(185,155,255,.42);
+  --tx:#f6f2ff; --mut:#b4acE4; --dim:#8a81c0;
+  --up:#2dff9c; --up2:rgba(45,255,156,.16); --dn:#ff4d79; --dn2:rgba(255,77,121,.18);
+  --gold:#ffd23f; --gold2:rgba(255,210,63,.17); --sky:#27e6ff; --pink:#ff3fa4; --vio:#9b6bff;
+  --grad:linear-gradient(115deg,#ff3fa4 0%,#9b6bff 48%,#27e6ff 100%);
+  --r:18px; color-scheme:dark;
 }
-*{box-sizing:border-box;margin:0;padding:0}
+*{box-sizing:border-box;margin:0;padding:0;scrollbar-width:thin;scrollbar-color:#6d4bd6 transparent}
 html{background:var(--bg)}
-body{font-family:'Be Vietnam Pro',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;background:
-  radial-gradient(900px 480px at 78% -8%,rgba(93,224,178,.07),transparent 60%),
-  radial-gradient(700px 420px at -6% 30%,rgba(121,184,255,.05),transparent 60%),var(--bg);
-  color:var(--tx);min-height:100vh;font-size:14px;line-height:1.45;font-variant-numeric:tabular-nums;
+body{font-family:'Be Vietnam Pro',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--tx);min-height:100vh;font-size:14px;line-height:1.45;font-variant-numeric:tabular-nums;
   padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
 button,input,select{font:inherit;color:inherit}
 button{cursor:pointer}
 :focus-visible{outline:2px solid var(--sky);outline-offset:2px}
 .up{color:var(--up)} .dn{color:var(--dn)} .gold{color:var(--gold)} .mut{color:var(--mut)}
 
-/* ── cổng duyệt thiết bị ── */
+/* nền cực quang */
+.bg-fx{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.bg-fx i{position:absolute;width:62vmax;height:62vmax;border-radius:50%;animation:drift 24s ease-in-out infinite alternate}
+.bg-fx i:nth-child(1){background:radial-gradient(closest-side,rgba(255,63,164,.42),transparent);left:-22vmax;top:-26vmax}
+.bg-fx i:nth-child(2){background:radial-gradient(closest-side,rgba(91,59,255,.5),transparent);right:-24vmax;top:4vmax;animation-duration:30s}
+.bg-fx i:nth-child(3){background:radial-gradient(closest-side,rgba(18,216,255,.32),transparent);left:16vmax;bottom:-40vmax;animation-duration:36s}
+@keyframes drift{to{transform:translate3d(7vmax,5vmax,0) scale(1.14)}}
+
+/* cổng duyệt thiết bị */
 #gate{position:fixed;inset:0;z-index:50;display:grid;place-items:center;background:var(--bg);padding:24px;text-align:center}
 #gate .box{max-width:380px}
-#gate h2{font-size:20px;font-weight:700;margin-bottom:8px}
+#gate h2{font-size:20px;font-weight:800;margin-bottom:8px}
 #gate p{color:var(--mut)}
-#gate .dot{width:10px;height:10px;border-radius:50%;background:var(--gold);margin:0 auto 18px;animation:pulse 1.4s infinite}
-@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(233,196,106,.5)}100%{box-shadow:0 0 0 14px rgba(233,196,106,0)}}
+#gate .dot{width:12px;height:12px;border-radius:50%;background:var(--gold);margin:0 auto 18px;animation:pulse 1.4s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,210,63,.6)}100%{box-shadow:0 0 0 16px rgba(255,210,63,0)}}
 
-/* ── khung ── */
-.app{display:grid;grid-template-columns:272px minmax(0,1fr);min-height:100vh}
-.rail{border-right:1px solid var(--line);background:linear-gradient(180deg,var(--bg2),var(--bg));padding:22px 16px;display:flex;flex-direction:column;gap:18px;position:sticky;top:0;height:100vh;overflow:auto}
-.brand{display:flex;align-items:baseline;gap:8px;padding:0 6px}
-.brand b{font-size:19px;font-weight:800;letter-spacing:-.2px}
-.brand span{color:var(--mut);font-size:12px}
-.acc-list{display:flex;flex-direction:column;gap:6px}
-.acc{display:grid;grid-template-columns:auto 1fr auto;gap:2px 10px;align-items:center;text-align:left;width:100%;padding:11px 12px;border-radius:12px;border:1px solid transparent;background:transparent}
-.acc:hover{background:var(--surf)}
-.acc.sel{background:var(--surf);border-color:var(--line2)}
-.acc .st{grid-row:1/3;width:9px;height:9px;border-radius:50%;background:var(--dim)}
-.acc .st.running{background:var(--up);box-shadow:0 0 0 0 rgba(93,224,178,.5);animation:pulse2 1.8s infinite}
-.acc .st.paused,.acc .st.hold{background:var(--gold)}
-.acc .st.nofund,.acc .st.error,.acc .st.restart{background:var(--dn)}
-@keyframes pulse2{0%{box-shadow:0 0 0 0 rgba(93,224,178,.5)}100%{box-shadow:0 0 0 9px rgba(93,224,178,0)}}
-.acc .nm{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.acc .pl{font-weight:700;font-size:13px}
+/* khung */
+.app{position:relative;z-index:1;display:grid;grid-template-columns:278px minmax(0,1fr);min-height:100vh}
+.rail{border-right:1px solid var(--line);background:linear-gradient(180deg,rgba(22,12,64,.88),rgba(7,4,28,.92));backdrop-filter:blur(14px);padding:22px 16px;display:flex;flex-direction:column;gap:18px;position:sticky;top:0;height:100vh;overflow:auto}
+.brand{display:flex;align-items:center;gap:12px;padding:0 4px}
+.brand .logo{font-style:normal;flex:none;width:46px;height:46px;border-radius:15px;display:grid;place-items:center;font-size:24px;background:var(--grad);box-shadow:0 0 24px rgba(255,63,164,.6);animation:float 3.4s ease-in-out infinite}
+.brand b{display:block;font-size:18px;font-weight:900;letter-spacing:.6px;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.brand span{color:var(--mut);font-size:11.5px}
+@keyframes float{50%{transform:translateY(-3px) rotate(-7deg)}}
+.acc-list{display:flex;flex-direction:column;gap:8px}
+.acc{display:grid;grid-template-columns:auto 1fr auto;gap:2px 10px;align-items:center;text-align:left;width:100%;padding:12px 13px;border-radius:15px;border:1px solid var(--line);background:var(--bg2);transition:transform .15s,border-color .15s}
+.acc:hover{border-color:var(--line2);transform:translateX(3px)}
+.acc.sel{border-color:transparent;background:linear-gradient(var(--card),var(--card)) padding-box,var(--grad) border-box;box-shadow:0 0 24px rgba(155,107,255,.4)}
+.acc .st{grid-row:1/3;width:10px;height:10px;border-radius:50%;background:var(--dim)}
+.acc .st.running{background:var(--up);box-shadow:0 0 10px var(--up);animation:pulse2 1.8s infinite}
+.acc .st.paused,.acc .st.hold{background:var(--gold);box-shadow:0 0 10px var(--gold)}
+.acc .st.nofund,.acc .st.error,.acc .st.restart{background:var(--dn);box-shadow:0 0 10px var(--dn)}
+@keyframes pulse2{0%{box-shadow:0 0 0 0 rgba(45,255,156,.65)}100%{box-shadow:0 0 0 10px rgba(45,255,156,0)}}
+.acc .nm{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acc .nm .tb{font-style:normal;font-size:10.5px;font-weight:800;padding:1px 8px;border-radius:99px;margin-left:6px;background:var(--gold2);color:var(--gold)}
+.acc .nm .tb.lchu{background:rgba(39,230,255,.16);color:var(--sky)}
+.acc .pl{font-weight:800;font-size:13px}
 .acc .sub{grid-column:2/4;color:var(--mut);font-size:12px}
-.btn-add{border:1px dashed var(--line2);background:transparent;border-radius:12px;padding:11px;color:var(--mut);font-weight:600}
-.btn-add:hover{color:var(--tx);border-color:var(--mut)}
+.btn-add{border:1.5px dashed var(--line2);background:transparent;border-radius:15px;padding:12px;color:var(--mut);font-weight:700;transition:.15s}
+.btn-add:hover{color:#fff;border-color:var(--pink);background:rgba(255,63,164,.12)}
 .rail .foot{margin-top:auto;color:var(--dim);font-size:11.5px;padding:0 6px;display:none}
+.main{padding:22px clamp(16px,3vw,36px) 48px;display:flex;flex-direction:column;gap:20px;min-width:0;max-width:1280px;width:100%}
 
-.main{padding:22px clamp(16px,3vw,36px) 48px;display:flex;flex-direction:column;gap:22px;min-width:0;max-width:1280px;width:100%}
+/* dải phiên trực tiếp */
+.feed{display:flex;flex-wrap:wrap;align-items:center;gap:8px 24px;padding:11px 18px 11px 14px;border:1px solid var(--line);border-radius:var(--r);background:var(--bg2);backdrop-filter:blur(10px)}
+.feed::before{content:"● LIVE";font-weight:900;font-size:11.5px;letter-spacing:.6px;color:#fff;background:linear-gradient(90deg,#ff3d5e,#ff3fa4);padding:3px 11px;border-radius:99px;animation:blink 1.6s infinite}
+.feed:has(>.dn)::before{content:"● LỖI";background:#4a3f80;animation:none}
+@keyframes blink{50%{opacity:.6;box-shadow:0 0 16px #ff3d5e}}
+.feed .k{color:var(--mut);margin-right:6px;font-weight:700}
+.pill{display:inline-block;padding:3px 12px;border-radius:99px;font-weight:900;font-size:13px}
+.pill.t{background:linear-gradient(135deg,#ffb300,#ff7a00);color:#2a1500;box-shadow:0 0 14px rgba(255,160,0,.55)}
+.pill.x{background:linear-gradient(135deg,#27e6ff,#3b7bff);color:#021a33;box-shadow:0 0 14px rgba(39,230,255,.5)}
+.pill.n{background:var(--surf2);color:var(--mut)}
+.dice{display:inline-flex;gap:5px;vertical-align:middle}
+.dice i{font-style:normal;display:grid;place-items:center;width:23px;height:23px;border-radius:7px;background:#fff;color:#2a1a66;font-size:13px;font-weight:800;box-shadow:0 2px 0 #b9a8ff}
 
-/* ── dải phiên ── */
-.feed{display:flex;flex-wrap:wrap;align-items:center;gap:6px 22px;padding:10px 16px;border:1px solid var(--line);border-radius:var(--r);background:var(--bg2)}
-.feed .k{color:var(--mut);margin-right:6px}
-.feed .pill{display:inline-block;padding:2px 10px;border-radius:99px;font-weight:700;font-size:13px}
-.pill.t{background:var(--up2);color:var(--up)} .pill.x{background:var(--dn2);color:var(--dn)} .pill.n{background:var(--surf2);color:var(--mut)}
-.dice{display:inline-flex;gap:4px;vertical-align:middle}
-.dice i{font-style:normal;display:grid;place-items:center;width:20px;height:20px;border-radius:6px;background:var(--surf2);font-size:12px;font-weight:700}
-
-/* ── hero: lãi/lỗ + biểu đồ ── */
-.hero{border:1px solid var(--line);border-radius:18px;background:linear-gradient(180deg,var(--surf),var(--bg2));padding:20px 22px 14px;position:relative;overflow:hidden}
-.hero-top{display:flex;flex-wrap:wrap;justify-content:space-between;gap:14px 20px;align-items:flex-start}
+/* hero: lãi/lỗ + biểu đồ */
+.hero{border:1.5px solid transparent;border-radius:24px;background:linear-gradient(var(--card),#0d0628) padding-box,linear-gradient(115deg,#ff3fa4,#9b6bff,#27e6ff,#2dff9c,#ff3fa4) border-box;background-size:100% 100%,300% 100%;animation:flow 8s ease-in-out infinite alternate;box-shadow:0 0 40px rgba(155,107,255,.3),0 18px 50px rgba(0,0,0,.45);padding:22px 24px 14px;position:relative;overflow:hidden}
+@keyframes flow{to{background-position:0 0,100% 0}}
+.hero::before{content:"";position:absolute;right:-90px;top:-100px;width:340px;height:340px;border-radius:50%;background:radial-gradient(closest-side,rgba(255,63,164,.3),transparent);pointer-events:none}
+.hero-top{display:flex;flex-wrap:wrap;justify-content:space-between;gap:14px 20px;align-items:flex-start;position:relative}
 .who{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.who h1{font-size:15px;font-weight:600;color:var(--mut)}
-.chip{display:inline-flex;align-items:center;gap:7px;padding:3px 11px;border-radius:99px;font-size:12.5px;font-weight:600;background:var(--surf2);color:var(--mut)}
-.chip.running{background:var(--up2);color:var(--up)} .chip.paused,.chip.hold{background:var(--gold2);color:var(--gold)}
+.who h1{font-size:15px;font-weight:700;color:var(--mut)}
+.chip{display:inline-flex;align-items:center;gap:7px;padding:4px 13px;border-radius:99px;font-size:12.5px;font-weight:800;background:var(--surf2);color:var(--mut)}
+.chip.running{background:var(--up2);color:var(--up);box-shadow:0 0 14px rgba(45,255,156,.3)} .chip.paused,.chip.hold{background:var(--gold2);color:var(--gold)}
 .chip.nofund,.chip.error,.chip.restart{background:var(--dn2);color:var(--dn)} .chip.target{background:var(--up2);color:var(--up)}
-.net{font-size:clamp(38px,6.4vw,64px);font-weight:800;letter-spacing:-1.5px;line-height:1.05;margin-top:6px}
-.net small{font-size:.32em;font-weight:600;letter-spacing:0;color:var(--mut);margin-left:8px}
+.net{font-family:'Orbitron','Be Vietnam Pro',system-ui,sans-serif;font-size:clamp(32px,5.8vw,60px);font-weight:900;letter-spacing:-.5px;line-height:1.12;margin-top:8px}
+.net.up{color:var(--up);text-shadow:0 0 14px rgba(45,255,156,.75),0 0 48px rgba(45,255,156,.4)}
+.net.dn{color:var(--dn);text-shadow:0 0 14px rgba(255,77,121,.75),0 0 48px rgba(255,77,121,.4)}
+.net small{font-family:'Be Vietnam Pro',system-ui,sans-serif;font-size:.26em;font-weight:700;letter-spacing:0;text-shadow:none;color:var(--mut);margin-left:10px}
 .actions{display:flex;gap:8px;flex-wrap:wrap}
-.btn{border:1px solid var(--line2);background:var(--surf2);border-radius:10px;padding:8px 16px;font-weight:600}
-.btn:hover{border-color:var(--mut)}
-.btn.go{background:var(--up);border-color:var(--up);color:#06231a}
-.btn.go:hover{filter:brightness(1.08)}
-.btn.warn{color:var(--gold);border-color:rgba(233,196,106,.4)}
-.btn.stop{color:var(--dn);border-color:rgba(255,112,112,.4)}
-.btn:disabled{opacity:.5;cursor:not-allowed}
-.chart-bar{display:flex;justify-content:space-between;align-items:center;margin:14px 0 4px;gap:10px;flex-wrap:wrap}
-.seg{display:inline-flex;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:3px}
-.seg button{border:0;background:transparent;padding:5px 12px;border-radius:7px;color:var(--mut);font-weight:600;font-size:13px}
-.seg button.on{background:var(--surf2);color:var(--tx)}
+.btn{border:1px solid var(--line2);background:var(--surf2);border-radius:12px;padding:9px 18px;font-weight:800;transition:transform .15s,box-shadow .15s,border-color .15s}
+.btn:hover{border-color:#fff;transform:translateY(-1px)}
+.btn.go{border:0;background:linear-gradient(120deg,#2dff9c,#27e6ff);color:#02261b;box-shadow:0 0 22px rgba(45,255,156,.5)}
+.btn.go:hover{box-shadow:0 0 36px rgba(45,255,156,.85)}
+.btn.warn{color:var(--gold);border-color:rgba(255,210,63,.55);background:var(--gold2)}
+.btn.stop{border:0;color:#fff;background:linear-gradient(120deg,#ff3d5e,#ff3fa4);box-shadow:0 0 18px rgba(255,61,94,.5)}
+.btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.chart-bar{display:flex;justify-content:space-between;align-items:center;margin:14px 0 4px;gap:10px;flex-wrap:wrap;position:relative}
+.seg{display:inline-flex;background:rgba(7,4,28,.75);border:1px solid var(--line);border-radius:12px;padding:3px}
+.seg button{border:0;background:transparent;padding:6px 13px;border-radius:9px;color:var(--mut);font-weight:700;font-size:13px}
+.seg button.on{background:var(--grad);color:#fff;box-shadow:0 0 14px rgba(155,107,255,.6)}
 #chartwrap{position:relative;height:300px}
 #chart{width:100%;height:100%;display:block}
-#tip{position:absolute;pointer-events:none;background:rgba(10,20,23,.96);border:1px solid var(--line2);border-radius:10px;padding:8px 11px;font-size:12.5px;min-width:150px;display:none;z-index:3}
+#tip{position:absolute;pointer-events:none;background:rgba(10,5,36,.96);border:1px solid var(--line2);border-radius:12px;padding:9px 12px;font-size:12.5px;min-width:150px;display:none;z-index:3;box-shadow:0 0 22px rgba(155,107,255,.4)}
 #tip b{display:block;margin-bottom:2px}
 .empty{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--mut);padding:20px}
 .empty[hidden],.app[hidden]{display:none}
 
-/* ── số liệu ── */
-.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:1px solid var(--line);border-radius:var(--r);background:var(--bg2)}
-.metrics>div{padding:14px 18px;border-right:1px solid var(--line)}
-.metrics>div:last-child{border-right:0}
-.metrics .l{color:var(--mut);font-size:12.5px}
-.metrics .v{font-size:22px;font-weight:700;margin-top:2px}
-.metrics .s{color:var(--dim);font-size:12px;margin-top:1px}
+/* 4 ô số liệu nhiều màu */
+.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.metrics>div{padding:15px 18px;border-radius:var(--r);border:1px solid var(--c1);background:linear-gradient(145deg,var(--c2),rgba(20,11,58,.88) 72%)}
+.m1{--c1:rgba(255,210,63,.55);--c2:rgba(255,210,63,.24)} .m2{--c1:rgba(255,63,164,.55);--c2:rgba(255,63,164,.24)}
+.m3{--c1:rgba(45,255,156,.55);--c2:rgba(45,255,156,.2)} .m4{--c1:rgba(39,230,255,.55);--c2:rgba(39,230,255,.2)}
+.metrics .l{color:var(--mut);font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:7px}
+.metrics .l b{font-size:17px;font-weight:400}
+.metrics .v{font-family:'Orbitron','Be Vietnam Pro',system-ui,sans-serif;font-size:21px;font-weight:800;margin-top:5px}
+.metrics .s{color:var(--mut);font-size:12px;margin-top:2px}
 
-/* ── hai cột ── */
-.cols{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);gap:22px;align-items:start}
-.panel{border:1px solid var(--line);border-radius:var(--r);background:var(--bg2);overflow:hidden}
-.panel>h3{font-size:15px;font-weight:700;padding:15px 18px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:10px}
-.panel>h3 .saved{font-size:12px;font-weight:500;color:var(--mut)}
-.row{display:grid;grid-template-columns:1fr auto;gap:6px 14px;align-items:center;padding:13px 18px;border-bottom:1px solid var(--line)}
+/* hai cột */
+.cols{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);gap:20px;align-items:start}
+.panel{border:1px solid var(--line);border-radius:var(--r);background:var(--bg2);backdrop-filter:blur(10px);overflow:hidden}
+.panel>h3{font-size:15px;font-weight:800;padding:15px 18px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:10px;background:linear-gradient(90deg,rgba(255,63,164,.2),rgba(39,230,255,.1))}
+.panel>h3 .saved{font-size:12px;font-weight:600;color:var(--mut)}
+.row{display:grid;grid-template-columns:1fr auto;gap:6px 14px;align-items:center;padding:14px 18px 14px 21px;border-bottom:1px solid var(--line);box-shadow:inset 4px 0 0 var(--ac,var(--vio))}
 .row:last-child{border-bottom:0}
-.row .t{font-weight:600}
+#cfgbox>.row:nth-child(1){--ac:var(--gold)} #cfgbox>.row:nth-child(2){--ac:var(--pink)} #cfgbox>.row:nth-child(3){--ac:var(--vio)}
+#cfgbox>.row:nth-child(4){--ac:var(--up)} #cfgbox>.row:nth-child(5){--ac:var(--sky)} #cfgbox>.row:nth-child(6){--ac:#ff8a3d}
+.row .t{font-weight:700}
 .row .d{color:var(--mut);font-size:12.5px;grid-column:1}
 .row .sub{grid-column:1/3;display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;color:var(--mut);font-size:13px;padding-top:2px}
 .row .sub[hidden]{display:none}
-.sw{position:relative;width:44px;height:26px;flex:none}
+.sw{position:relative;width:46px;height:27px;flex:none}
 .sw input{position:absolute;inset:0;opacity:0;cursor:pointer;margin:0;width:100%;height:100%;z-index:1}
-.sw span{position:absolute;inset:0;border-radius:99px;background:var(--surf2);border:1px solid var(--line2);transition:background .18s}
-.sw span::after{content:"";position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:var(--mut);transition:transform .18s,background .18s}
-.sw input:checked+span{background:var(--up2);border-color:var(--up)}
-.sw input:checked+span::after{transform:translateX(18px);background:var(--up)}
+.sw span{position:absolute;inset:0;border-radius:99px;background:rgba(7,4,28,.85);border:1px solid var(--line2);transition:background .18s}
+.sw span::after{content:"";position:absolute;top:3px;left:3px;width:19px;height:19px;border-radius:50%;background:var(--mut);transition:transform .18s,background .18s}
+.sw input:checked+span{background:linear-gradient(120deg,#2dff9c,#27e6ff);border-color:transparent;box-shadow:0 0 14px rgba(45,255,156,.65)}
+.sw input:checked+span::after{transform:translateX(19px);background:#fff}
 .sw input:focus-visible+span{outline:2px solid var(--sky);outline-offset:2px}
-.num{width:96px;background:var(--bg);border:1px solid var(--line2);border-radius:9px;padding:6px 9px;text-align:right}
+.num{width:96px;background:var(--bg);border:1px solid var(--line2);border-radius:10px;padding:7px 10px;text-align:right;font-weight:700}
 .num.w{width:150px;text-align:left}
-.num:focus{border-color:var(--sky);outline:0}
+.num:focus{border-color:var(--sky);outline:0;box-shadow:0 0 0 3px rgba(39,230,255,.22)}
 label.ck{display:inline-flex;align-items:center;gap:7px;cursor:pointer}
-label.ck input{accent-color:var(--up);width:16px;height:16px}
-.mini{border:1px solid var(--line2);background:var(--surf2);border-radius:8px;padding:4px 10px;font-size:12.5px;font-weight:600}
+label.ck input{accent-color:var(--pink);width:16px;height:16px}
+.mini{border:1px solid var(--line2);background:var(--surf2);border-radius:9px;padding:5px 11px;font-size:12.5px;font-weight:700}
 .err{color:var(--dn);padding:10px 18px;font-size:13px;border-top:1px solid var(--line)}
-/* thẻ "Dừng khi đạt lãi" (gộp tự rút) */
-.goal{margin:12px 14px;border:1px solid var(--line2);border-radius:16px;background:linear-gradient(180deg,var(--surf),var(--bg2));overflow:hidden;transition:border-color .2s,box-shadow .2s}
-.goal.open{border-color:var(--up);box-shadow:0 0 0 1px var(--up2),0 8px 24px rgba(0,0,0,.25)}
+/* thẻ "Dừng khi đạt lãi" */
+.goal{margin:14px;border:1.5px solid transparent;border-radius:18px;background:linear-gradient(var(--card),var(--card)) padding-box,linear-gradient(120deg,#ffd23f,#ff3fa4,#9b6bff) border-box;overflow:hidden;transition:box-shadow .2s}
+.goal.open{box-shadow:0 0 30px rgba(255,210,63,.32)}
 .goal-h{display:flex;align-items:center;gap:12px;padding:14px 16px}
 .goal-h.sm{padding:6px 0}
-.goal-ic{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;font-size:19px;background:var(--up2);flex:none}
-.goal-t{flex:1;min-width:0}.goal-t .t{font-weight:700}.goal-t .d{color:var(--mut);font-size:12.5px;margin-top:1px}
+.goal-ic{width:40px;height:40px;border-radius:13px;display:grid;place-items:center;font-size:20px;background:linear-gradient(135deg,#ffd23f,#ff7a00);box-shadow:0 0 16px rgba(255,170,0,.55);flex:none}
+.goal-t{flex:1;min-width:0}.goal-t .t{font-weight:800}.goal-t .d{color:var(--mut);font-size:12.5px;margin-top:1px}
 .goal-b{padding:0 16px 16px;display:flex;flex-direction:column;gap:10px}
 .goal-b[hidden],.wd-box[hidden]{display:none}
-.gl{font-size:12px;font-weight:600;color:var(--mut);text-transform:uppercase;letter-spacing:.6px}
-.money{display:flex;align-items:center;background:var(--bg);border:1px solid var(--line2);border-radius:12px;padding:0 14px}
-.money:focus-within{border-color:var(--up)}
-.money input{flex:1;min-width:0;background:none;border:0;outline:0;font-size:22px;font-weight:800;padding:11px 0;color:var(--tx)}
-.money em{font-style:normal;color:var(--mut);font-weight:700;font-size:13px}
+.gl{font-size:12px;font-weight:700;color:var(--gold)}
+.money{display:flex;align-items:center;background:var(--bg);border:1px solid var(--line2);border-radius:13px;padding:0 14px}
+.money:focus-within{border-color:var(--gold);box-shadow:0 0 0 3px rgba(255,210,63,.22)}
+.money input{flex:1;min-width:0;background:none;border:0;outline:0;font-family:'Orbitron','Be Vietnam Pro',sans-serif;font-size:21px;font-weight:800;padding:11px 0;color:var(--gold)}
+.money em{font-style:normal;color:var(--mut);font-weight:800;font-size:13px}
 .chips{display:flex;gap:8px;flex-wrap:wrap}
-.chip-q{border:1px solid var(--line2);background:var(--surf2);border-radius:99px;padding:5px 13px;font-size:12.5px;font-weight:700;color:var(--tx)}
-.chip-q:hover{border-color:var(--up);color:var(--up)}
+.chip-q{border:1px solid var(--line2);background:var(--surf2);border-radius:99px;padding:5px 14px;font-size:12.5px;font-weight:800;color:var(--tx);transition:.15s}
+.chip-q:hover{background:var(--grad);border-color:transparent;color:#fff;box-shadow:0 0 14px rgba(155,107,255,.55)}
 .goal-sep{height:1px;background:var(--line);margin:4px 0 0}
-.wd-box{display:flex;flex-direction:column;gap:10px;padding:14px;border-radius:12px;background:var(--bg);border:1px dashed var(--line2)}
-.seg.big{display:flex;margin-top:0}.seg.big button{flex:1;padding:9px 6px;font-size:14px}
+.wd-box{display:flex;flex-direction:column;gap:10px;padding:14px;border-radius:13px;background:rgba(7,4,28,.7);border:1px dashed var(--line2)}
+.seg.big{display:flex}.seg.big button{flex:1;padding:9px 6px;font-size:14px}
 .mini.pull{align-self:flex-start}
 .wlist{display:flex;flex-direction:column;gap:6px}.wlist:empty{display:none}
-.wcard{display:flex;flex-direction:column;align-items:flex-start;gap:1px;text-align:left;border:1px solid var(--line2);background:var(--surf);border-radius:10px;padding:9px 12px;color:var(--tx)}
+.wcard{display:flex;flex-direction:column;align-items:flex-start;gap:1px;text-align:left;border:1px solid var(--line2);background:var(--surf);border-radius:11px;padding:9px 12px;color:var(--tx)}
 .wcard small{color:var(--mut)}.wcard.on{border-color:var(--up);background:var(--up2)}
-.fi{width:100%;background:var(--surf);border:1px solid var(--line2);border-radius:10px;padding:10px 12px;color:var(--tx)}
-.fi:focus{border-color:var(--up);outline:0}
-.wd-sum{font-size:13px;line-height:1.5;padding:10px 12px;border-radius:10px;background:var(--up2);color:var(--tx)}
+.fi{width:100%;background:var(--bg);border:1px solid var(--line2);border-radius:11px;padding:10px 12px;color:var(--tx)}
+.fi:focus{border-color:var(--sky);outline:0;box-shadow:0 0 0 3px rgba(39,230,255,.22)}
+.wd-sum{font-size:13px;line-height:1.5;padding:10px 12px;border-radius:11px;background:var(--up2);color:var(--tx)}
 .wd-sum i{color:var(--gold);font-style:normal}
 .hint{font-size:12px;color:var(--dim)}
 
-/* ── bảng ván / nhật ký ── */
-.tabs{display:flex;border-bottom:1px solid var(--line)}
-.tabs button{flex:1;border:0;background:transparent;padding:14px;font-weight:600;color:var(--mut);border-bottom:2px solid transparent}
-.tabs button.on{color:var(--tx);border-bottom-color:var(--up)}
+/* ván cược / nhật ký */
+.tabs{display:flex;border-bottom:1px solid var(--line);background:rgba(7,4,28,.5)}
+.tabs button{flex:1;border:0;background:transparent;padding:14px;font-weight:800;color:var(--mut);border-bottom:3px solid transparent}
+.tabs button.on{color:#fff;border-image:var(--grad) 1;background:linear-gradient(180deg,transparent,rgba(155,107,255,.18))}
 .list{max-height:520px;overflow:auto}
-.bet{display:grid;grid-template-columns:62px 1fr auto;gap:2px 10px;padding:10px 18px;border-bottom:1px solid var(--line);align-items:center}
+.bet{display:grid;grid-template-columns:62px 1fr auto;gap:2px 10px;padding:11px 18px;border-bottom:1px solid var(--line);align-items:center}
+.bet.w{box-shadow:inset 4px 0 0 var(--up);background:linear-gradient(90deg,var(--up2),transparent 45%)}
+.bet.l{box-shadow:inset 4px 0 0 var(--dn);background:linear-gradient(90deg,var(--dn2),transparent 45%)}
 .bet .ph{color:var(--mut);font-size:12.5px}
-.bet .dt{font-size:13.5px}
-.bet .am{font-weight:700;text-align:right}
-.bet.open{background:var(--gold2)}
+.bet .dt{font-size:13.5px;font-weight:600}
+.bet .am{font-family:'Orbitron','Be Vietnam Pro',sans-serif;font-weight:800;text-align:right;font-size:13.5px}
+.bet.open{background:var(--gold2);box-shadow:inset 4px 0 0 var(--gold)}
 .log{display:grid;grid-template-columns:54px 1fr;gap:10px;padding:9px 18px;border-bottom:1px solid var(--line);font-size:13px}
 .log .tm{color:var(--dim);font-size:12px}
-.log.warn,.log.error{color:var(--dn)} .log.wd{color:var(--gold)} .log.pause{color:var(--gold)} .log.win{color:var(--up)} .log.loss{color:var(--tx)} .log.virt,.log.info,.log.bet{color:var(--mut)}
-.nothing{padding:34px 18px;text-align:center;color:var(--mut)}
+.log.warn,.log.error{color:var(--dn)} .log.wd,.log.pause{color:var(--gold)} .log.win{color:var(--up)} .log.loss{color:var(--tx)} .log.virt,.log.info,.log.bet{color:var(--mut)}
+.nothing{padding:36px 18px;text-align:center;color:var(--mut)}
 
-/* ── đăng nhập ── */
-.login{max-width:520px;margin:6vh auto 0;border:1px solid var(--line);border-radius:18px;background:linear-gradient(180deg,var(--surf),var(--bg2));padding:28px}
-.login h2{font-size:24px;font-weight:800;letter-spacing:-.4px;margin-bottom:6px}
+/* đăng nhập */
+.login{max-width:520px;margin:6vh auto 0;border:1.5px solid transparent;border-radius:24px;background:linear-gradient(var(--card),#0d0628) padding-box,var(--grad) border-box;padding:30px;box-shadow:0 0 46px rgba(155,107,255,.32)}
+.login h2{font-size:26px;font-weight:900;letter-spacing:-.3px;margin-bottom:6px;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
 .login p.lead{color:var(--mut);margin-bottom:20px}
 .fld{display:block;margin-bottom:14px}
-.fld span{display:block;color:var(--mut);font-size:12.5px;margin-bottom:5px}
-.fld input{width:100%;background:var(--bg);border:1px solid var(--line2);border-radius:10px;padding:11px 13px}
-.fld input:focus{border-color:var(--sky);outline:0}
+.fld span{display:block;color:var(--mut);font-size:12.5px;font-weight:700;margin-bottom:5px}
+.fld input{width:100%;background:var(--bg);border:1px solid var(--line2);border-radius:12px;padding:12px 14px}
+.fld input:focus{border-color:var(--sky);outline:0;box-shadow:0 0 0 3px rgba(39,230,255,.22)}
 .pwb{position:relative}
 .pwb input{padding-right:46px}
 .pwb .eye{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:38px;height:38px;border:0;background:none;color:var(--mut);display:grid;place-items:center;border-radius:8px}
-.pwb .eye:hover{color:var(--tx)}
+.pwb .eye:hover{color:#fff}
 .pwb .eye svg{width:20px;height:20px}
-.login .btn{width:100%;padding:12px}
+.login .btn{width:100%;padding:13px;font-size:15px}
 .login .msg{margin-top:12px;font-size:13px;min-height:18px}
 .note{margin-top:14px;font-size:12px;color:var(--dim)}
-
-.toast{position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--surf2);border:1px solid var(--line2);padding:10px 18px;border-radius:12px;z-index:60;display:none;max-width:90vw}
+.toast{position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--card);border:1.5px solid var(--vio);padding:11px 20px;border-radius:14px;z-index:60;display:none;max-width:90vw;font-weight:600;box-shadow:0 0 26px rgba(155,107,255,.5)}
 
 @media (max-width:980px){
   .app{grid-template-columns:1fr}
   .rail{position:static;height:auto;flex-direction:row;align-items:center;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line);padding:12px;gap:8px}
   .brand,.rail .foot{display:none}
   .acc-list{flex-direction:row}
-  .acc{width:auto;min-width:170px}
+  .acc{width:auto;min-width:176px}
   .btn-add{white-space:nowrap}
   .cols{grid-template-columns:1fr}
   .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .metrics>div:nth-child(2){border-right:0}
-  .metrics>div:nth-child(-n+2){border-bottom:1px solid var(--line)}
   #chartwrap{height:240px}
 }
-@media (max-width:600px){.row>.seg{grid-column:1/3;justify-self:stretch;display:flex}.row>.seg button{flex:1;padding:7px 4px}.main{padding-left:12px;padding-right:12px}.hero{padding:16px 14px 10px}}
+@media (max-width:600px){.row>.seg{grid-column:1/3;justify-self:stretch;display:flex}.row>.seg button{flex:1;padding:7px 4px}.main{padding-left:12px;padding-right:12px}.hero{padding:16px 14px 10px}.metrics .v{font-size:18px}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
 <div id="gate"><div class="box"><div class="dot"></div><h2 id="gt">Đang kiểm tra thiết bị…</h2><p id="gm">Vui lòng chờ.</p></div></div>
 <div id="toast" class="toast" role="status"></div>
+<div class="bg-fx"><i></i><i></i><i></i></div>
 
 <div class="app" id="app" hidden>
   <aside class="rail">
-    <div class="brand"><b>Auto cược</b><span>LC79 · Tài Xỉu MD5</span></div>
+    <div class="brand"><i class="logo">🎲</i><div><b>AUTO CƯỢC</b><span>LC79 · MD5 + Hũ</span></div></div>
     <div class="acc-list" id="accs"></div>
     <button class="btn-add" id="addbtn">+ Thêm tài khoản</button>
     <div class="foot" id="railfoot"></div>
@@ -8548,7 +9207,7 @@ function toast(m){const t=$('#toast');t.textContent=m;t.style.display='block';cl
 function gate(){$('#app').hidden=false;init()}
 
 /* ── trạng thái ── */
-let PREFILL='', S=null, SEL=null, ADDING=false, FORMKEY='', F=null, LOGIN=null, TAB='bets', RANGE=0, MODE='net', saveT=0, saveMsg='';
+let WANT='', PREFILL='', S=null, SEL=null, ADDING=false, FORMKEY='', F=null, LOGIN=null, TAB='bets', RANGE=0, MODE='net', saveT=0, saveMsg='';
 async function poll(){
   try{
     const j=await api('state'+(SEL?('?id='+SEL):''));
@@ -8563,7 +9222,7 @@ function render(){
   const acc=filterMyAccs(S.sessions);
   if(!acc.length&&!ADDING)ADDING=true;
   $('#accs').innerHTML=acc.map(a=>`<button class="acc ${a.id===SEL&&!ADDING?'sel':''}" data-id="${a.id}">
-    <i class="st ${a.status}"></i><span class="nm">${esc(a.nick||a.username)}</span><span class="pl ${a.net>=0?'up':'dn'}">${fmtS(a.net)}</span>
+    <i class="st ${a.status}"></i><span class="nm">${esc(a.nick||a.username)}<em class="tb ${a.table||'lcmd5'}">${esc(a.table_short||'MD5')}</em></span><span class="pl ${a.net>=0?'up':'dn'}">${fmtS(a.net)}</span>
     <span class="sub">${STATUS[a.status]||a.status} · ${fmt(a.balance)}</span></button>`).join('');
   document.querySelectorAll('.acc').forEach(b=>b.onclick=()=>{SEL=b.dataset.id;ADDING=false;FORMKEY='';poll_now()});
   $('#railfoot').innerHTML='<button class="btn-add" id="klo" type="button">Đăng xuất key</button>';$('#klo').onclick=()=>ABK_OUT();
@@ -8577,10 +9236,10 @@ async function poll_now(){const j=await api('state?id='+SEL);if(j.ok){S=j;render
 const EYE='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
 const EYE_OFF='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.5 10.5 0 0 1 12 19c-6.4 0-10-7-10-7a18.6 18.6 0 0 1 4.06-5.06M9.9 4.24A9.9 9.9 0 0 1 12 5c6.4 0 10 7 10 7a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24"/><path d="M1 1l22 22"/></svg>';
 function renderLogin(){
-  const m=$('#main'); const key='login'+(LOGIN?LOGIN.id:'');
+  const m=$('#main'); const key='login'+(LOGIN?((LOGIN.id||'')+'|'+(LOGIN.sel||'')):'');
   if(FORMKEY===key)return; FORMKEY=key;
   if(!LOGIN){
-    m.innerHTML=`<section class="login"><h2>Thêm tài khoản LC79</h2><p class="lead">Đăng nhập để tool lấy số dư thật và đặt cược theo dự đoán của bàn LC MD5.</p>
+    m.innerHTML=`<section class="login"><h2>Thêm tài khoản LC79</h2><p class="lead">Đăng nhập để tool lấy số dư thật và đặt cược theo dự đoán của bàn LC MD5 và LC Hũ — mỗi bàn có cấu hình riêng.</p>
       <label class="fld"><span>Tên đăng nhập</span><input id="lu" value="${esc(PREFILL)}" autocomplete="username" autocapitalize="none" spellcheck="false"></label>
       <div class="fld"><span>Mật khẩu</span><div class="pwb"><input id="lp" type="password" autocomplete="current-password"><button type="button" class="eye" id="lpe" aria-label="Hiện mật khẩu" title="Hiện / ẩn mật khẩu">${EYE}</button></div></div>
       <button class="btn go" id="lgo">Đăng nhập</button><div class="msg dn" id="lmsg"></div>
@@ -8590,29 +9249,36 @@ function renderLogin(){
       $('#lgo').disabled=true;$('#lgo').textContent='Đang đăng nhập…';$('#lmsg').textContent='';
       const j=await api('login',{username:u,password:p});
       if(!j.ok){$('#lgo').disabled=false;$('#lgo').textContent='Đăng nhập';$('#lmsg').textContent=j.loi||'Đăng nhập thất bại';const pe=$('#lp');if(pe){pe.focus();pe.select()}return}
-      lsAddAcc(u); LOGIN=j;SEL=j.id;FORMKEY='';F=null;render();
+      lsAddAcc(u); LOGIN=j;LOGIN.sel=(WANT&&j.tables&&j.tables[WANT])?WANT:'lcmd5';WANT='';SEL=j.id;FORMKEY='';F=null;render();
     };
     $('#lgo').onclick=go; $('#lp').onkeydown=e=>{if(e.key==='Enter')go()};
     $('#lpe').onclick=()=>{const i=$('#lp'),sh=i.type==='password';i.type=sh?'text':'password';$('#lpe').innerHTML=sh?EYE_OFF:EYE;$('#lpe').setAttribute('aria-label',sh?'Ẩn mật khẩu':'Hiện mật khẩu');i.focus()};
     setTimeout(()=>{const e=PREFILL?$('#lp'):$('#lu');e&&e.focus()},50);
     return;
   }
-  /* đã đăng nhập: chọn cấu hình rồi bắt đầu */
-  F=Object.assign({},LOGIN.cfg||{});
+  /* đã đăng nhập: chọn BÀN (MD5 / Hũ) — mỗi bàn có cấu hình RIÊNG — rồi bắt đầu */
+  const TB=LOGIN.tables||{}; const keys=['lcmd5','lchu'].filter(k=>TB[k]);
+  if(!LOGIN.sel||!TB[LOGIN.sel])LOGIN.sel=keys[0];
+  const sel=LOGIN.sel, T=TB[sel];
+  LOGIN.fs=LOGIN.fs||{};
+  if(!LOGIN.fs[sel])LOGIN.fs[sel]=Object.assign({},T.cfg||{});
+  F=LOGIN.fs[sel];
   m.innerHTML=`<section class="login" style="max-width:720px;padding:0;overflow:hidden">
     <div style="padding:22px 24px;border-bottom:1px solid var(--line)"><h2 style="margin-bottom:2px">${esc(LOGIN.nick)}</h2>
-    <p class="mut">Số dư thật: <b class="gold">${fmt(LOGIN.balance)}</b> — chọn cách cược rồi bấm Bắt đầu. Đổi được cả khi đang chạy.</p></div>
+    <p class="mut">Số dư thật: <b class="gold">${fmt(LOGIN.balance)}</b> — mỗi bàn có <b>cấu hình riêng</b>: chọn bàn, chỉnh luật cược rồi bấm Bắt đầu. Đổi được cả khi đang chạy.</p></div>
+    <div style="padding:14px 24px 0"><div class="seg big" id="tbseg">${keys.map(k=>`<button data-t="${k}" class="${k===sel?'on':''}">${esc(TB[k].label)}${TB[k].alive?' · đang chạy':''}</button>`).join('')}</div></div>
     <div id="cfgbox"></div>
     <div style="padding:18px 24px;display:flex;gap:10px;flex-wrap:wrap;border-top:1px solid var(--line)">
-      <button class="btn go" id="sgo" style="width:auto;flex:1">Bắt đầu auto cược</button>
-      ${LOGIN.co_lich_su?'<button class="btn" id="scont" style="width:auto">Tiếp tục lịch sử cũ</button>':''}
-    </div><div class="msg dn" id="smsg" style="padding:0 24px 16px"></div></section>`;
+      <button class="btn go" id="sgo" style="width:auto;flex:1" ${T.alive?'disabled':''}>Bắt đầu auto cược bàn ${esc(T.label)}</button>
+      ${T.co_lich_su&&!T.alive?'<button class="btn" id="scont" style="width:auto">Tiếp tục lịch sử cũ</button>':''}
+    </div><div class="msg dn" id="smsg" style="padding:0 24px 16px">${T.alive?'Bàn này đang chạy — chọn nó ở danh sách bên trái để chỉnh cấu hình.':''}</div></section>`;
   buildCfg($('#cfgbox'),false);
+  $('#tbseg').querySelectorAll('button').forEach(b=>b.onclick=()=>{LOGIN.sel=b.dataset.t;FORMKEY='';render()});
   const start=async reset=>{
     $('#smsg').textContent='';
-    const j=await api('start',{id:LOGIN.id,cfg:F,reset});
+    const j=await api('start',{id:T.id,cfg:F,reset});
     if(!j.ok){$('#smsg').textContent=j.loi||'Không bắt đầu được';return}
-    ADDING=false;LOGIN=null;FORMKEY='';await poll_now();
+    SEL=T.id;ADDING=false;LOGIN=null;FORMKEY='';await poll_now();
   };
   $('#sgo').onclick=()=>start(true);
   if($('#scont'))$('#scont').onclick=()=>start(false);
@@ -8681,7 +9347,7 @@ function buildCfg(box,live){
     dirty();
   });
   $('#wd_pull').onclick=async()=>{
-    const id=live?SEL:(LOGIN&&LOGIN.id); const l=$('#wd_list'); l.innerHTML='<span class="mut">Đang lấy…</span>';
+    const id=live?SEL:(LOGIN&&LOGIN.tables&&LOGIN.tables[LOGIN.sel]?LOGIN.tables[LOGIN.sel].id:(LOGIN&&LOGIN.id)); const l=$('#wd_list'); l.innerHTML='<span class="mut">Đang lấy…</span>';
     const j=await api('wallets',{id,kind:F.wd_kind});
     if(!j.ok||!j.wallets.length){l.innerHTML='<span class="mut">LC79 chưa liên kết '+(F.wd_kind==='bank'?'tài khoản ngân hàng':'ví Momo')+' nào — nhập tay bên dưới.</span>';return}
     l.innerHTML=j.wallets.map((w,i)=>`<button type="button" class="wcard ${w.number===F.wd_number?'on':''}" data-i="${i}"><b>${esc((w.code||F.wd_kind).toUpperCase())} · ${esc(w.number)}</b><small>${esc(w.name||'')}</small></button>`).join('');
@@ -8722,7 +9388,7 @@ function renderSession(s){
     </section>
     <div class="metrics" id="metrics"></div>
     <div class="cols">
-      <section class="panel"><h3>Tính năng <span class="saved" id="saved"></span></h3><div id="cfgbox"></div><div class="err" id="cfgerr" style="display:none"></div></section>
+      <section class="panel"><h3>Tính năng · bàn ${esc(s.table_label||'LC MD5')} <span class="saved" id="saved"></span></h3><div id="cfgbox"></div><div class="err" id="cfgerr" style="display:none"></div></section>
       <section class="panel"><div class="tabs"><button data-t="bets" class="on">Ván cược</button><button data-t="logs">Nhật ký</button></div><div class="list" id="list"></div></section>
     </div>`;
     buildCfg($('#cfgbox'),true);
@@ -8734,11 +9400,11 @@ function renderSession(s){
     $('#rangeseg').querySelectorAll('button').forEach(x=>x.classList.toggle('on',+x.dataset.r===RANGE));
     bindChart();
   }
-  const f=S.feed;
+  const f=(S.feeds&&S.feeds[s.table])||S.feed;
   $('#feed').innerHTML=f.ok?`<span><span class="k">${esc(f.ban||'LC MD5')}</span>Phiên ${f.phien?('#'+f.phien):'—'} ${sidePill(f.du_doan)}</span>
     <span class="mut">Trước: ${f.phien_truoc?('#'+f.phien_truoc):'—'} ${sidePill(f.ket_qua_truoc)} ${dice(f.xuc_xac)}</span>`
     :`<span class="dn">Nguồn dự đoán đang lỗi: ${esc(f.loi||'chưa có dữ liệu')} — auto cược sẽ không đặt ván mới.</span>`;
-  $('#h_nick').textContent=s.nick||s.username;
+  $('#h_nick').textContent=(s.nick||s.username)+' · '+(s.table_label||'LC MD5');
   const chip=$('#h_chip');chip.className='chip '+s.status;chip.textContent=STATUS[s.status]||s.status;
   const n=$('#h_net');n.className='net '+(s.net>=0?'up':'dn');n.innerHTML=fmtS(s.net)+'<small>lãi / lỗ</small>';
   const act=$('#h_act');
@@ -8748,19 +9414,20 @@ function renderSession(s){
   if(act.dataset.h!==ah){act.dataset.h=ah;act.innerHTML=ah;act.querySelectorAll('button').forEach(b=>b.onclick=()=>doAct(b.dataset.a))}
   const open=s.open;
   $('#metrics').innerHTML=`
-   <div><div class="l">Số dư</div><div class="v gold">${fmt(s.balance)}</div><div class="s">vốn ${fmt(s.start_bal)}</div></div>
-   <div><div class="l">Cược ván kế</div><div class="v">${fmt(s.bet)}</div><div class="s">${s.x2_active?'đang x2':s.reduced?'đang giảm':'gốc '+fmt(s.base_bet)}${s.paused?' · pause':''}</div></div>
-   <div><div class="l">Thắng / Thua</div><div class="v"><span class="up">${s.w}</span> / <span class="dn">${s.l}</span></div><div class="s">${s.wr==null?'chưa có ván':s.wr+'% thắng'} · chuỗi ${s.win_streak?('thắng '+s.win_streak):s.loss_streak?('thua '+s.loss_streak):'—'}</div></div>
-   <div><div class="l">Đã rút</div><div class="v">${fmt(s.withdrawn)}</div><div class="s">${s.wd_count} lần · ${s.cfg.wd_on?'auto rút BẬT':'auto rút tắt'}</div></div>`;
+   <div class="m1"><div class="l"><b>💰</b>Số dư</div><div class="v gold">${fmt(s.balance)}</div><div class="s">vốn ${fmt(s.start_bal)}</div></div>
+   <div class="m2"><div class="l"><b>🎲</b>Cược ván kế</div><div class="v">${fmt(s.bet)}</div><div class="s">${s.x2_active?'đang x2':s.reduced?'đang giảm':'gốc '+fmt(s.base_bet)}${s.paused?' · pause':''}</div></div>
+   <div class="m3"><div class="l"><b>🏆</b>Thắng / Thua</div><div class="v"><span class="up">${s.w}</span> / <span class="dn">${s.l}</span></div><div class="s">${s.wr==null?'chưa có ván':s.wr+'% thắng'} · chuỗi ${s.win_streak?('thắng '+s.win_streak):s.loss_streak?('thua '+s.loss_streak):'—'}</div></div>
+   <div class="m4"><div class="l"><b>💸</b>Đã rút</div><div class="v">${fmt(s.withdrawn)}</div><div class="s">${s.wd_count} lần · ${s.cfg.wd_on?'auto rút BẬT':'auto rút tắt'}</div></div>`;
   window.__series=s.series||[];window.__logs=s.logs||[];window.__open=open;
   drawChart();paintList();paintSaved();
 }
 async function doAct(a){
   if(a==='restart'){const s=S.selected;ADDING=true;FORMKEY='';
-    if(s&&s.has_pw){LOGIN={id:s.id,nick:s.nick||s.username,balance:s.balance,co_lich_su:s.rounds>0,cfg:s.cfg};PREFILL=''}
-    else{LOGIN=null;PREFILL=s?s.username:''}
+    const tables={};(S.sessions||[]).filter(x=>s&&x.username===s.username).forEach(x=>{tables[x.table||'lcmd5']={id:x.id,label:x.table_label||'LC MD5',cfg:x.cfg,co_lich_su:x.rounds>0,alive:x.alive}});
+    if(s&&s.has_pw&&Object.keys(tables).length){LOGIN={id:s.id,nick:s.nick||s.username,balance:s.balance,tables,sel:s.table||'lcmd5'};PREFILL='';WANT=''}
+    else{LOGIN=null;PREFILL=s?s.username:'';WANT=s?(s.table||'lcmd5'):''}
     render();return}
-  if(a==='remove'&&!confirm('Xoá tài khoản này khỏi danh sách (mất lịch sử)?'))return;
+  if(a==='remove'&&!confirm('Xoá tài khoản này khỏi danh sách — xoá cả 2 bàn MD5 + Hũ (mất lịch sử)?'))return;
   if(a==='stop'&&!confirm('Dừng hẳn auto cược?'))return;
   const j=await api('action',{id:SEL,act:a});
   if(!j.ok)toast(j.loi||'Không thực hiện được');
@@ -8774,7 +9441,7 @@ function paintList(){
   if(TAB==='bets'){
     let h='';
     if(o)h+=`<div class="bet open"><span class="ph">#${o.phien}</span><span class="dt">${o.virtual?'Theo dõi ảo':'Đang chờ kết quả'} · ${o.side==='TAI'?'Tài':'Xỉu'}</span><span class="am gold">${o.amount?fmt(o.amount):'—'}</span></div>`;
-    h+=s.slice(-60).reverse().map(p=>`<div class="bet"><span class="ph">#${p.phien}</span><span class="dt">${p.side==='TAI'?'Tài':'Xỉu'} ${fmt(p.amount)} → ${p.res==='TAI'?'Tài':'Xỉu'} ${p.win?'✅':'❌'}</span><span class="am ${p.pnl>=0?'up':'dn'}">${fmtS(p.pnl)}</span></div>`).join('');
+    h+=s.slice(-60).reverse().map(p=>`<div class="bet ${p.win?'w':'l'}"><span class="ph">#${p.phien}</span><span class="dt">${p.side==='TAI'?'Tài':'Xỉu'} ${fmt(p.amount)} → ${p.res==='TAI'?'Tài':'Xỉu'} ${p.win?'✅':'❌'}</span><span class="am ${p.pnl>=0?'up':'dn'}">${fmtS(p.pnl)}</span></div>`).join('');
     L.innerHTML=h||'<div class="nothing">Chưa có ván nào. Ván đầu tiên sẽ hiện ở đây.</div>';
   }else{
     L.innerHTML=lg.slice().reverse().map(e=>`<div class="log ${e.kind}"><span class="tm">${tm(e.t)}</span><span>${esc(e.msg)}</span></div>`).join('')||'<div class="nothing">Chưa có sự kiện nào.</div>';
@@ -8817,10 +9484,10 @@ function drawChart(){
   const X=i=>L+(pts.length<2?cw/2:i*cw/(pts.length-1)), Y=v=>T+(hi-v)/(hi-lo)*ch;
   g.font='11.5px "Be Vietnam Pro",system-ui,sans-serif';g.textBaseline='middle';
   /* lưới + trục giá trị */
-  g.strokeStyle='rgba(130,153,154,.14)';g.fillStyle='#5c7377';g.lineWidth=1;
+  g.strokeStyle='rgba(170,150,255,.16)';g.fillStyle='#9a91d6';g.lineWidth=1;
   for(let v=lo;v<=hi+step/2;v+=step){const y=Y(v);g.beginPath();g.moveTo(L,y);g.lineTo(W-R,y);g.stroke();g.textAlign='left';g.fillText((v>0&&MODE==='net'?'+':'')+shortN(v),W-R+8,y)}
-  const zy=Y(base);g.save();g.setLineDash([4,4]);g.strokeStyle='rgba(231,240,236,.35)';g.beginPath();g.moveTo(L,zy);g.lineTo(W-R,zy);g.stroke();g.restore();
-  g.textAlign='center';g.fillStyle='#5c7377';g.textBaseline='alphabetic';
+  const zy=Y(base);g.save();g.setLineDash([4,4]);g.strokeStyle='rgba(255,255,255,.4)';g.beginPath();g.moveTo(L,zy);g.lineTo(W-R,zy);g.stroke();g.restore();
+  g.textAlign='center';g.fillStyle='#9a91d6';g.textBaseline='alphabetic';
   g.fillText(pts.length>1?('ván '+pts[1].r):'',L+14,H-6);g.fillText(pts.length>1?('ván '+pts[pts.length-1].r):'',W-R-16,H-6);
   PTS=pts.map((p,i)=>({x:X(i),y:Y(p.v),d:p}));
   if(pts.length<2)return;
@@ -8829,16 +9496,16 @@ function drawChart(){
     g.save();g.beginPath();if(clipTop)g.rect(0,0,W,zy);else g.rect(0,zy,W,H-zy);g.clip();
     const gr=g.createLinearGradient(0,clipTop?T:zy,0,clipTop?zy:T+ch);gr.addColorStop(0,col0);gr.addColorStop(1,col1);
     path();g.lineTo(PTS[PTS.length-1].x,zy);g.lineTo(PTS[0].x,zy);g.closePath();g.fillStyle=gr;g.fill();
-    path();g.strokeStyle=line;g.lineWidth=2.2;g.lineJoin='round';g.stroke();g.restore()};
-  area(true,'rgba(93,224,178,.34)','rgba(93,224,178,0)','#5de0b2');
-  area(false,'rgba(255,112,112,0)','rgba(255,112,112,.34)','#ff7070');
+    path();g.shadowColor=line;g.shadowBlur=16;g.strokeStyle=line;g.lineWidth=2.8;g.lineJoin='round';g.stroke();g.restore()};
+  area(true,'rgba(45,255,156,.42)','rgba(45,255,156,0)','#2dff9c');
+  area(false,'rgba(255,77,121,0)','rgba(255,77,121,.42)','#ff4d79');
   /* mốc rút tiền */
   const r0=pts[1]?pts[1].r:0;
   (window.__logs||[]).filter(e=>e.kind==='wd'&&e.ok===true).forEach(e=>{
     const idx=pts.findIndex(p=>p.r>=e.r&&p.r>0);const i=idx<0?pts.length-1:idx; if(e.r<r0&&RANGE>0)return;
-    const p=PTS[i];g.save();g.translate(p.x,p.y);g.rotate(Math.PI/4);g.fillStyle='#e9c46a';g.fillRect(-4.5,-4.5,9,9);g.restore()});
+    const p=PTS[i];g.save();g.translate(p.x,p.y);g.rotate(Math.PI/4);g.fillStyle='#ffd23f';g.shadowColor='#ffd23f';g.shadowBlur=12;g.fillRect(-5.5,-5.5,11,11);g.restore()});
   /* điểm cuối + con trỏ */
-  const last=PTS[PTS.length-1];g.beginPath();g.arc(last.x,last.y,4.5,0,7);g.fillStyle=pts[pts.length-1].v>=base?'#5de0b2':'#ff7070';g.fill();
+  const last=PTS[PTS.length-1];g.beginPath();g.arc(last.x,last.y,4.5,0,7);const lc=pts[pts.length-1].v>=base?'#2dff9c':'#ff4d79';g.shadowColor=lc;g.shadowBlur=18;g.fillStyle=lc;g.fill();g.shadowBlur=0;
   if(HOVER>=0&&PTS[HOVER]){const p=PTS[HOVER];g.strokeStyle='rgba(231,240,236,.4)';g.lineWidth=1;g.beginPath();g.moveTo(p.x,T);g.lineTo(p.x,T+ch);g.stroke();
     g.beginPath();g.arc(p.x,p.y,5,0,7);g.fillStyle='#e7f0ec';g.fill()}
 }
@@ -8856,15 +9523,21 @@ AB_SHELL = r"""<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
 <title>Auto cược LC79</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800;900&family=Orbitron:wght@600;800;900&display=swap" rel="stylesheet">
 <style>
-*{box-sizing:border-box}body{margin:0;min-height:100vh;background:#0a1417;color:#e7f0ec;font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;color:#f6f2ff;font:15px/1.5 'Be Vietnam Pro',system-ui,-apple-system,"Segoe UI",sans-serif;
+  background:radial-gradient(700px 420px at 12% 0%,rgba(255,63,164,.38),transparent 60%),radial-gradient(800px 520px at 92% 18%,rgba(91,59,255,.5),transparent 60%),radial-gradient(700px 500px at 40% 112%,rgba(18,216,255,.3),transparent 60%),#07041c}
 #kg{min-height:100vh;display:grid;place-items:center;padding:24px}
-.kbox{width:100%;max-width:380px;background:#12242a;border:1px solid #21393f;border-radius:18px;padding:30px 26px;text-align:center}
-.kbox h2{margin:0 0 6px;font-size:20px}.kbox p{margin:0 0 18px;color:#82999a;font-size:14px}
-.kbox input{width:100%;height:46px;padding:0 14px;border-radius:12px;border:1px solid #2b4950;background:#0a1417;color:#e7f0ec;font:inherit;font-size:16px;margin-bottom:12px}
-.kbox input:focus{outline:0;border-color:#e9c46a}
-.kbox button{width:100%;height:46px;border:0;border-radius:12px;background:#e9c46a;color:#1a1405;font:inherit;font-weight:700;font-size:15px;cursor:pointer}
-.kbox button:disabled{opacity:.6;cursor:wait}#kmsg{margin:12px 0 0!important;color:#ff7070!important;min-height:20px}
+.kbox{width:100%;max-width:390px;border:1.5px solid transparent;border-radius:26px;padding:36px 28px;text-align:center;background:linear-gradient(#140b3a,#0d0628) padding-box,linear-gradient(115deg,#ff3fa4,#9b6bff,#27e6ff) border-box;box-shadow:0 0 54px rgba(155,107,255,.4)}
+.kbox h2{margin:0 0 6px;font-size:25px;font-weight:900;background:linear-gradient(115deg,#ff3fa4,#9b6bff,#27e6ff);-webkit-background-clip:text;background-clip:text;color:transparent}
+.kbox p{margin:0 0 20px;color:#b4ace4;font-size:14px}
+.kbox input{width:100%;height:48px;padding:0 15px;border-radius:13px;border:1px solid rgba(185,155,255,.42);background:#07041c;color:#f6f2ff;font:inherit;font-size:16px;margin-bottom:13px}
+.kbox input:focus{outline:0;border-color:#27e6ff;box-shadow:0 0 0 3px rgba(39,230,255,.22)}
+.kbox button{width:100%;height:48px;border:0;border-radius:13px;background:linear-gradient(120deg,#2dff9c,#27e6ff);color:#02261b;font:inherit;font-weight:900;font-size:15px;cursor:pointer;box-shadow:0 0 24px rgba(45,255,156,.5)}
+.kbox button:disabled{opacity:.6;cursor:wait}#kmsg{margin:12px 0 0!important;color:#ff4d79!important;min-height:20px}
 </style></head><body>
 <div id="kg"><div class="kbox">
   <h2>🎲 Auto cược LC79</h2>
@@ -8959,6 +9632,42 @@ def _sec_report():
         print("[SEC] " + x, file=sys.stderr)
 
 
+def _security_selfcheck():
+    """Chạy 1 lần lúc khởi động (sau khi mọi route đã đăng ký). Trả danh sách vấn đề (rỗng = ổn):
+       · route /api/predict* chưa có trong bảng OFFSRV_PATH_TABLE (không tắt server riêng được) hoặc chưa nằm trong cổng key -> TỰ VÁ vào cổng key (bắt buộc key) rồi báo.
+       · endpoint trong bảng nhưng không có route / thiếu ở cổng key / thiếu _view_guard."""
+    probs = []
+    rules = {r.rule: r for r in app.url_map.iter_rules()}
+    for p in sorted(rules):
+        if p.startswith("/api/predict"):
+            if p not in OFFSRV_PATH_TABLE:
+                probs.append(f"route {p} giong endpoint du doan nhung CHUA co trong OFFSRV_PATH_TABLE -> chua tat server rieng duoc (da tu dua vao cong key)")
+            if p not in _GATED_EXACT:
+                _GATED_EXACT.add(p)
+                probs.append(f"route {p} chua nam trong _GATED_EXACT -> da tu them vao cong key")
+    for p, tk in OFFSRV_PATH_TABLE.items():
+        if p not in rules:
+            probs.append(f"OFFSRV_PATH_TABLE co {p} nhung khong co route")
+            continue
+        if p not in _GATED_EXACT:
+            _GATED_EXACT.add(p)
+            probs.append(f"{p} chua nam trong _GATED_EXACT -> da tu them vao cong key")
+        if tk != "sun" and tk not in HIT_TABLES:
+            probs.append(f"{p} tro toi ban '{tk}' khong ton tai")
+    for fn in (api_predict, api_predict_hit_thuong, api_predict_hit_md5, api_predict_lc_md5, api_predict_lc_hu):
+        try:
+            if "_view_guard" not in fn.__code__.co_names and "_hit_predict" not in fn.__code__.co_names:
+                probs.append(f"view {fn.__name__} khong goi _view_guard")
+        except Exception:  # noqa: BLE001
+            pass
+    if "_view_guard" not in _hit_predict.__code__.co_names:
+        probs.append("_hit_predict khong goi _view_guard")
+    for x in probs:
+        print("[SEC] LOI CONG: " + x, file=sys.stderr)
+    return probs
+
+
+_SELFCHECK = _security_selfcheck()
 _sec_report()
 
 # Chạy dưới gunicorn (Railway) thì main() không được gọi -> bật poller ngay khi import.
@@ -9141,9 +9850,10 @@ def main():
     print(f"AF doi che do ->  {('BAT · chi can ' + str(AF_SWITCH_NEED) + ' phieu (tren tong so logic) de doi giua ALL / CAO / THAP, thay vi da so 7/13 · nho che do van truoc · 2 che do con lai cung du phieu: ' + ('uu tien theo van truoc (ALL->CAO · CAO->ALL · THAP->CAO)' if AF_SWITCH_PRIO else 'lay che do nhieu phieu hon')) if AF_SWITCH else 'TAT (cach goc: nhom dong hon thang, can da so 7/13)'}")
     print(f"be final AF ->  moi che do {'BAT' if AF_FLIP_FINAL else 'TAT'} · CAO+THAP gop {'BAT (ALL giu nguyen)' if AF_FLIP_FINAL_CT else 'TAT'} · chi CAO {'BAT' if AF_FLIP_FINAL_CAO else 'TAT'} · chi THAP {'BAT' if AF_FLIP_FINAL_THAP else 'TAT'} · chi ALL {'BAT (CAO/THAP giu nguyen)' if AF_FLIP_FINAL_ALL else 'TAT'}")
     print(f"xoa lich su ->  nut o panel {'BAT' if HIST_CLEAR_ENABLED else 'TAT'} · chi an lich su hien thi (khong dung toi logic / WR / AF) · file moc {HIST_CLEAR_PATH}")
-    print(f"OFF SERVER  ->  {'DANG BAT (tool ngoai khong nhan duoc du doan, chi panel / admin nhan)' if offsrv_state()['off'] else 'tat'} · bat / tat o trang /api/admin (chi admin chinh) · file {OFFSRV_PATH}")
+    _off = offsrv_state()["off_list"]
+    print(f"OFF SERVER  ->  {('DANG OFF: ' + ', '.join(_off) + ' (tool ngoai khong nhan duoc du doan cua cac ban nay, chi panel / admin nhan)') if _off else 'khong ban nao off'} · bat / tat TUNG BAN o tab 'Off server' trang /api/admin (chi admin chinh) · file {OFFSRV_PATH}")
     print(f"PANEL HTML  ->  thiet bi phai duoc admin chinh duyet (khong can key, vao ca Sun + Hit) · file {PANEL_DEV_PATH} · toi da {PANEL_MAX_PENDING_PER_IP} yeu cau cho duyet / IP")
-    print(f"AUTO CUOC   ->  {'BAT' if AB_ENABLED else 'TAT'} · http://{a.host}:{a.port}/tool/autocuoc · nguon du doan {AB_FEED_KEY} · luu mat khau {'CO (AUTOBET_SAVE_PW=1)' if AB_SAVE_PW else 'KHONG (chi RAM)'} · file {AB_PATH}")
+    print(f"AUTO CUOC   ->  {'BAT' if AB_ENABLED else 'TAT'} · http://{a.host}:{a.port}/tool/autocuoc · nguon du doan {' + '.join(AB_TABLE_KEYS)} · luu mat khau {'CO (AUTOBET_SAVE_PW=1)' if AB_SAVE_PW else 'KHONG (chi RAM)'} · file {AB_PATH}")
     print(f"WR 100 phien ->  luu toi da {PERSIST_KEEP} van da cham · WR dung/sai xet {EVAL_WINDOW} van gan nhat")
     print(f"WR          ->  xet {WR_WINDOW} van gan nhat, trong so cao nhat x{WR_WEIGHT_NEWEST}, flip trong so {'BAT (cu nhat nang nhat)' if WR_FLIP_WEIGHT else 'TAT (moi nhat nang nhat)'}, trong so (cu -> moi): "
           + " · ".join(f"{w:.2f}" for w in wr_weights_full()))
