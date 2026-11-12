@@ -24,7 +24,7 @@ Endpoint:
     ...?hist=N                   -> (mọi game) thêm lich_su: N ván đúng/sai gần nhất, mới -> cũ
     GET /api/predictlcmd5        -> [LC MD5] JSON dự đoán (game="lc79", ban="lcmd5"; tên cũ Tele68 MD5 — /api/predicttele68txmd5 vẫn chạy như alias); nguồn trả CẢ DANH SÁCH ~105 phiên, tool chỉ lưu thêm phiên chưa có, dự đoán phiên mới nhất + 1 và giữ tới khi API trả kết quả phiên đó (xem khối "CONFIG LC")
     GET /api/predictlchu         -> [LC HŨ] JSON dự đoán (game="lc79", ban="lchu"); nguồn https://wtx.tele68.com/v1/tx/sessions (cùng định dạng list với LC MD5), config + data RIÊNG (khối "CONFIG LC"). Key game LC79 dùng được cả 2 bàn LC
-    GET /tool/autocuoc           -> [AUTO CƯỢC LC79 · 2 BÀN MD5 + HŨ, config riêng từng bàn] trang web điều khiển auto cược + auto rút (thay bot Telegram): đăng nhập LC79, bật/tắt từng luật (x2 thắng/thua, giảm cược, pause, mục tiêu lãi, tự rút Momo/Ngân hàng), biểu đồ lãi/lỗ. GIAO DIỆN BỊ ẨN: chỉ có ô nhập KEY AUTO CƯỢC LC (game "autolc", tiền tố AUTOLC-, tạo ở /api/admin); nhập đúng key mới nhận được giao diện, và MỖI request /tool/autocuoc/api/* (kể cả nhận dự đoán) đều phải kèm X-User-Key + X-HWID. Mỗi key chỉ thấy tài khoản LC79 của mình; key hết hạn -> phiên auto cược tự dừng. Chạy gunicorn --workers 1 (xem khối "AUTO CƯỢC LC79")
+    GET /tool/autocuoc           -> [AUTO CƯỢC LC79 · 1 TÀI KHOẢN = 1 TAB, 2 BÀN MD5 + HŨ: luật cược riêng từng bàn, mục tiêu lãi + tự rút DÙNG CHUNG] trang web điều khiển auto cược + auto rút (thay bot Telegram): đăng nhập LC79, bật/tắt từng luật (x2 thắng/thua, giảm cược, pause, mục tiêu lãi, tự rút Momo/Ngân hàng), biểu đồ lãi/lỗ. GIAO DIỆN BỊ ẨN: chỉ có ô nhập KEY AUTO CƯỢC LC (game "autolc", tiền tố AUTOLC-, tạo ở /api/admin); nhập đúng key mới nhận được giao diện, và MỖI request /tool/autocuoc/api/* (kể cả nhận dự đoán) đều phải kèm X-User-Key + X-HWID. Mỗi key chỉ thấy tài khoản LC79 của mình; key hết hạn -> phiên auto cược tự dừng. Chạy gunicorn --workers 1 (xem khối "AUTO CƯỢC LC79")
     GET /api/html                -> panel HTML theo dõi Sun + Hit, đổi qua lại, chọn số ván lịch sử. CHỈ MỞ KHI ADMIN CHÍNH DUYỆT THIẾT BỊ (HWID): máy lạ thấy bảng "Đang chờ admin duyệt", được duyệt thì tự mở, KHÔNG cần key, vào cả Sun + Hit
     GET /api/panel/status        -> panel hỏi trạng thái duyệt của thiết bị này (gửi yêu cầu lần đầu): {"status": "approved" | "pending" | "denied" | "limit"} (xem khối "DUYỆT THIẾT BỊ VÀO PANEL")
     GET /api/admin/panel (+ POST /approve · /deny · /remove · /ban · /unban) -> admin CHÍNH xem + duyệt / từ chối / gỡ quyền / BAN (danh sách đen: chặn cả IP + thiết bị khỏi /api/html, trả 404) thiết bị vào panel (mục "Duyệt thiết bị vào panel HTML" ở trang /api/admin)
@@ -7161,7 +7161,7 @@ def health():
 # ═══════════════════════════════════════════════════════════════════════════
 #   Trang điều khiển:  GET /tool/autocuoc   (cùng cơ chế DUYỆT THIẾT BỊ như /api/html: máy lạ thấy bảng "đang chờ admin duyệt")
 #   Nguồn dự đoán:    2 BÀN — LC MD5 (HIT_TABLES["lcmd5"], WS wss://wtxmd52.tele68.com/txmd5/ · namespace /txmd5) và LC HŨ (HIT_TABLES["lchu"], WS wss://wtx.tele68.com/tx/ · namespace /tx) — dùng ĐÚNG dự đoán final mà /api/predictlcmd5 · /api/predictlchu đang trả.
-#   MỖI BÀN = 1 PHIÊN RIÊNG của tài khoản: config riêng (cược gốc · thua x2 · giảm cược · pause · mục tiêu lãi / tự rút...), sổ cược + biểu đồ riêng, WebSocket riêng, bật / tắt độc lập. 1 lần đăng nhập tạo đủ 2 bàn; MD5 và Hũ dùng chung 1 ví.
+#   MỖI BÀN = 1 PHIÊN RIÊNG của tài khoản: luật cược riêng (cược gốc · thua / thắng x2 · giảm cược · pause), sổ cược + WebSocket riêng, bật / tắt độc lập. MỤC TIÊU LÃI + TỰ RÚT dùng CHUNG: so với TỔNG lãi/lỗ 2 bàn, chạm mục tiêu thì dừng cả 2 bàn rồi rút 1 lần. 1 lần đăng nhập = 1 tab tài khoản chứa đủ 2 bàn; MD5 và Hũ dùng chung 1 ví.
 #                     Mỗi phiên mới có dự đoán (tb.pending) -> đặt cược tự động · khi API trả kết quả phiên đó -> chấm thắng/thua rồi tính tiền cược phiên kế.
 #   Mỗi tài khoản LC79 = 1 phiên auto cược chạy luồng riêng (nhiều tài khoản chạy song song). Tất cả tính năng bật / tắt ngay trên trang, đổi khi đang chạy cũng được:
 #     · Khi THUA: giữ nguyên / reset về gốc / x2 (Martingale)  ·  x2 sau chuỗi N ván thua (một lần)  ·  giảm cược sau N ván thua liên tiếp
@@ -7812,6 +7812,44 @@ def ab_clean_cfg(raw, old=None):
     return c
 
 
+# ── CẤU HÌNH CHUNG CẢ TÀI KHOẢN ──
+#   1 tài khoản = 1 tab, 2 bàn (MD5 + Hũ). Mỗi bàn có luật cược RIÊNG (cược gốc · thua / thắng · x2 · giảm cược · pause),
+#   còn MỤC TIÊU LÃI + TỰ RÚT dùng CHUNG: lãi tính bằng TỔNG lãi/lỗ của cả 2 bàn; chạm mục tiêu -> dừng cả 2 bàn rồi rút 1 lần.
+AB_SHARED_KEYS = ("target_on", "target", "target_wd", "wd_on", "wd_kind", "wd_code", "wd_number", "wd_name")
+
+
+def ab_split_cfg(raw):
+    """Tách cấu hình gửi lên thành (phần RIÊNG của bàn, phần CHUNG của tài khoản)."""
+    r = raw if isinstance(raw, dict) else {}
+    return ({k: v for k, v in r.items() if k not in AB_SHARED_KEYS}, {k: v for k, v in r.items() if k in AB_SHARED_KEYS and k != "wd_on"})
+
+
+def ab_prepare_cfg(s, raw):
+    """Kiểm tra cấu hình mới (ném ValueError nếu sai) -> (cfg của bàn s, [(bàn còn lại, cfg đã gộp khoá chung)]). CHƯA áp dụng gì."""
+    own, shared = ab_split_cfg(raw)
+    mine = ab_clean_cfg({**own, **shared}, s.cfg)
+    sh = {k: mine[k] for k in AB_SHARED_KEYS}
+    others = []
+    for x in _ab_siblings(s):
+        try:
+            nc = ab_clean_cfg(sh, x.cfg)
+        except ValueError:                                  # cấu hình riêng cũ của bàn kia lệch -> chỉ chép khoá chung, không chặn
+            nc = dict(x.cfg)
+            nc.update(sh)
+        others.append((x, nc))
+    return mine, others
+
+
+def _ab_unify_shared(s):
+    """Đồng bộ khoá chung giữa 2 bàn của 1 tài khoản (phiên lưu từ bản cũ mỗi bàn 1 mục tiêu riêng): lấy theo bàn đang chạy -> bàn đã bật mục tiêu -> MD5."""
+    grp = [s] + _ab_siblings(s)
+    src = next((x for x in grp if x.alive), None) or next((x for x in grp if x.cfg.get("target_on")), None) \
+        or next((x for x in grp if x.table == "lcmd5"), s)
+    for x in grp:
+        if x is not src:
+            x.cfg.update({k: src.cfg.get(k) for k in AB_SHARED_KEYS})
+
+
 class AbLedger:
     """Số dư + lãi/lỗ theo ván (kèm chuỗi điểm cho biểu đồ)."""
 
@@ -7875,6 +7913,7 @@ class AbLedger:
 
 
 _ab_lock = threading.RLock()
+_ab_fin_lk = threading.RLock()  # đạt mục tiêu lãi chung: chỉ MỘT bàn được chốt "dừng cả 2 bàn + rút" (bàn kia thấy cờ _fin_done thì bỏ qua)
 _ab_sessions = {}               # sid -> AbSession
 _ab_leader = {"ok": None, "fd": None}
 _ab_save_t = {"t": 0.0}
@@ -7914,6 +7953,7 @@ def _ab_ensure_pair(s):
                 continue
             n = AbSession(s.username, s.password, s.jwt, s.ledger.balance, s.nick, t)
             n.owner = s.owner
+            n.cfg.update({k: s.cfg.get(k) for k in AB_SHARED_KEYS})            # mục tiêu lãi + tự rút dùng chung
             n.stop_reason = "ready"
             _ab_sessions[sid] = n
 
@@ -7943,7 +7983,8 @@ class AbSession:
         self._wd_fails = 0
         self._wd_next = 0.0
         self._bal_fail = 0
-        self._fin_lk = threading.Lock()    # đảm bảo "dừng + rút khi đạt lãi" chỉ chạy 1 lần
+        self._fin_done = False             # đã chốt mục tiêu lãi chung (dừng cả 2 bàn + rút) — chống chạy lặp
+        self._grp_stop = None              # (lý do, thông báo): bàn này sẽ tự dừng ngay khi ván THẬT đang chờ có kết quả
         self._sync_lk = threading.Lock()   # tuần tự hoá các lần quét số dư (không 2 lần chạy chồng nhau)
         self._login_money = None           # số dư lấy từ lần đăng nhập lại gần nhất (dự phòng khi API số dư không đọc được)
         self._jwt_chk = 0.0                # lần cuối kiểm tra hạn JWT
@@ -8058,8 +8099,12 @@ class AbSession:
     def should_resume(self):
         return self.paused and self.cfg["resume_wins"] > 0 and self.recovery_wins >= self.cfg["resume_wins"]
 
+    def group_net(self):
+        """TỔNG lãi/lỗ của cả tài khoản (MD5 + Hũ) — mục tiêu lãi dùng CHUNG nên so với tổng này."""
+        return self.ledger.net() + sum(x.ledger.net() for x in _ab_siblings(self))
+
     def hit_target(self):
-        return self.cfg["target_on"] and self.cfg["target"] > 0 and self.ledger.net() >= self.cfg["target"]
+        return (not self._fin_done) and self.cfg["target_on"] and self.cfg["target"] > 0 and self.group_net() >= self.cfg["target"]
 
     def apply_cfg(self, newcfg):
         """Đổi cấu hình khi đang chạy: cược gốc đổi thì cược hiện tại theo (nếu đang ở mức gốc); công tắc nào tắt thì bỏ trạng thái đặc biệt tương ứng."""
@@ -8087,6 +8132,7 @@ class AbSession:
                 return
             self.alive = True
             self.stop_reason = "running"
+            self._fin_done, self._grp_stop = False, None
             self.thread = threading.Thread(target=self._run, daemon=True, name=f"autobet-{self.sid}")
             self.thread.start()
             self.ws.start()
@@ -8152,6 +8198,11 @@ class AbSession:
 
     def _tick(self):
         if self._zero_guard():                                             # số dư về 0 -> dừng hẳn (chạy mỗi nhịp, trước mọi việc khác)
+            return
+        if self._grp_stop is not None and not (self.open and self.open.get("entry") is not None):   # bàn kia đã chạm mục tiêu chung: đợi ván thật đang mở có kết quả rồi dừng
+            why = self._grp_stop
+            self._grp_stop = None
+            self.stop(why[0], why[1])
             return
         if self.password and time.time() >= self._jwt_chk:                 # JWT sống 8 giờ -> tự đăng nhập lại khi còn < 15 phút (không đợi bị 401)
             self._jwt_chk = time.time() + 60
@@ -8336,15 +8387,27 @@ class AbSession:
             self._zero_guard()                                             # số dư thật về 0 -> dừng hẳn
 
     def _finish_target(self):
-        """Đạt mục tiêu lãi: DỪNG TOÀN BỘ CƯỢC trước, rồi (nếu đã chọn) rút hết số dư về tài khoản đã chọn. Chỉ chạy 1 lần."""
-        with self._fin_lk:
-            if not self.alive:
+        """Đạt mục tiêu lãi CHUNG (tổng lãi MD5 + Hũ): DỪNG CẢ 2 BÀN trước, rồi (nếu đã chọn) rút về tài khoản đã chọn. Chỉ chạy 1 lần cho cả tài khoản."""
+        with _ab_fin_lk:
+            if not self.alive or self._fin_done:
                 return
             c = self.cfg
-            self.stop("target", f"Đạt mục tiêu lãi {self.ledger.net():+,} (≥ {c['target']:,}) — đã dừng toàn bộ cược")
-            if not c["wd_on"]:
-                return
-            self._withdraw_all()
+            others = _ab_siblings(self)
+            grp = [self] + others
+            net = self.group_net()
+            for x in grp:
+                x._fin_done = True
+            self.stop("target", f"Đạt mục tiêu lãi chung {net:+,} (≥ {c['target']:,}) — đã dừng cả 2 bàn")
+            for x in others:
+                if x.alive:
+                    x.hold = True                                          # không đặt thêm ván mới; ván thật đang chờ vẫn được chấm rồi bàn tự dừng
+                    x._grp_stop = ("target", f"Bàn {self.tlabel} đã chạm mục tiêu lãi chung — dừng bàn {x.tlabel}")
+        if not c["wd_on"]:
+            return
+        t_end = time.time() + 25                                           # chờ ván THẬT đang mở của bàn kia có kết quả (tối đa 25s) để rút đúng số dư
+        while time.time() < t_end and any(x.alive and x.open and x.open.get("entry") is not None for x in others):
+            time.sleep(1)
+        self._withdraw_all()
 
     def _withdraw_all(self):
         """Gửi ĐÚNG 1 lệnh rút bằng số tiền ngưỡng người dùng đặt (không làm tròn mệnh giá, không chia nhỏ, không áp hạn mức của tool)."""
@@ -8537,6 +8600,11 @@ def ab_boot():
                 _ab_ensure_pair(s0)
             except Exception:  # noqa: BLE001
                 pass
+        for s0 in list(_ab_sessions.values()):                             # mục tiêu lãi + tự rút phải GIỐNG NHAU ở 2 bàn
+            try:
+                _ab_unify_shared(s0)
+            except Exception:  # noqa: BLE001
+                pass
 
 
 # ── Trang + API ──
@@ -8628,6 +8696,37 @@ def tool_autocuoc_ui():
     return resp
 
 
+_AB_ST_ORDER = ("running", "paused", "hold", "target", "expired", "nofund", "error", "restart", "wd_stop", "stopped", "ready")
+
+
+def _ab_groups(own):
+    """Các TÀI KHOẢN của key `own`: mỗi tài khoản = [phiên MD5, phiên Hũ] (1 tài khoản = 1 tab trên giao diện)."""
+    with _ab_lock:
+        sess = [s for s in _ab_sessions.values() if s.owner == own]
+    by = {}
+    for s in sess:
+        by.setdefault((s.username or "").strip().lower(), []).append(s)
+    return [sorted(g, key=lambda x: AB_TABLE_KEYS.index(x.table)) for g in by.values()]
+
+
+def _ab_acc_view(grp, full=False):
+    """Gộp 2 bàn của 1 tài khoản thành 1 hồ sơ: ví dùng chung, tổng lãi/lỗ, khoá cấu hình CHUNG (mục tiêu lãi + tự rút) + view từng bàn."""
+    base = next((x for x in grp if x.table == "lcmd5"), grp[0])
+    ref = next((x for x in grp if x.alive), base)                         # số dư ví: lấy ở bàn đang chạy (được quét thật), không thì MD5
+    sts = [x.status() for x in grp]
+    st = next((k for k in _AB_ST_ORDER if k in sts), "ready")
+    w, l = sum(x.ledger.w for x in grp), sum(x.ledger.l for x in grp)
+    return {
+        "id": base.sid, "username": base.username, "nick": base.nick or base.username, "status": st, "alive": any(x.alive for x in grp),
+        "hold": any(x.alive and x.hold for x in grp), "balance": ref.ledger.balance, "start_bal": ref.ledger.start_bal,
+        "net": sum(x.ledger.net() for x in grp), "rounds": sum(x.ledger.rounds for x in grp), "w": w, "l": l,
+        "wr": round(w / (w + l) * 100, 1) if (w + l) else None, "withdrawn": sum(x.ledger.withdrawn for x in grp),
+        "wd_count": sum(x.wd_count for x in grp), "has_pw": bool(base.password),
+        "shared": {k: base.cfg.get(k) for k in AB_SHARED_KEYS},
+        "tables": {x.table: x.view(full=full) for x in grp},
+    }
+
+
 @app.route("/tool/autocuoc/api/state")
 def tool_autocuoc_state():
     g = _ab_gate()
@@ -8635,19 +8734,18 @@ def tool_autocuoc_state():
         return g
     own = _ab_owner()
     with _ab_lock:
-        sess = [s for s in _ab_sessions.values() if s.owner == own]          # mỗi key chỉ thấy tài khoản của chính mình
-    for s0 in list(sess):
-        _ab_ensure_pair(s0)                                                 # mỗi tài khoản luôn có đủ 2 bàn (MD5 + Hũ)
-    with _ab_lock:
-        sess = [s for s in _ab_sessions.values() if s.owner == own]
-    sel = _ab_get(request.args.get("id", ""))
-    if sel is None and sess:
-        sel = next((s for s in sess if s.alive), sess[0])
+        for s0 in [s for s in _ab_sessions.values() if s.owner == own]:
+            _ab_ensure_pair(s0)                                             # mỗi tài khoản luôn có đủ 2 bàn (MD5 + Hũ)
+    groups = _ab_groups(own)
+    want = request.args.get("id", "")
+    sel = next((g2 for g2 in groups if any(x.sid == want for x in g2)), None)
+    if sel is None and groups:
+        sel = next((g2 for g2 in groups if any(x.alive for x in g2)), groups[0])
     feeds = {t: _ab_feed_view(t) for t in AB_TABLE_KEYS}
-    return _json({"ok": True, "feed": feeds[sel.table if sel else "lcmd5"], "feeds": feeds,
+    return _json({"ok": True, "feeds": feeds,
                   "tables": {t: {"label": AB_TABLES[t]["label"], "short": AB_TABLES[t]["short"]} for t in AB_TABLE_KEYS},
-                  "sessions": [s.view() for s in sess],
-                  "selected": sel.view(full=True) if sel else None,
+                  "accounts": [_ab_acc_view(g2) for g2 in groups],
+                  "selected": _ab_acc_view(sel, full=True) if sel else None,
                   "luu_mk": AB_SAVE_PW, "multi": AB_MULTI,
                   "wd_limits": {"momo": [AB_MOMO_MIN, AB_MOMO_MAX], "bank": [AB_BANK_MIN, AB_BANK_MAX]}})
 
@@ -8696,7 +8794,7 @@ def tool_autocuoc_login():
             tables[t] = {"id": sid_t, "label": AB_TABLES[t]["label"], "cfg": cur.cfg, "co_lich_su": cur.ledger.rounds > 0, "alive": cur.alive}
     ab_save(force=True)
     m5 = tables["lcmd5"]
-    return _json({"ok": True, "id": m5["id"], "nick": nick, "balance": bal, "co_lich_su": m5["co_lich_su"], "cfg": m5["cfg"], "tables": tables})
+    return _json({"ok": True, "id": m5["id"], "nick": nick, "balance": bal, "co_lich_su": m5["co_lich_su"], "cfg": m5["cfg"], "shared": {k: m5["cfg"].get(k) for k in AB_SHARED_KEYS}, "tables": tables})
 
 
 @app.route("/tool/autocuoc/api/start", methods=["POST"])
@@ -8709,9 +8807,9 @@ def tool_autocuoc_start():
     if s is None:
         return _json({"ok": False, "loi": "Không thấy tài khoản — đăng nhập lại"}, 404)
     if s.alive:
-        return _json({"ok": False, "loi": "Đang chạy rồi"}, 409)
+        return _json({"ok": False, "loi": "Bàn này đang chạy rồi"}, 409)
     try:
-        cfg = ab_clean_cfg(b.get("cfg") or {}, s.cfg)
+        cfg, others = ab_prepare_cfg(s, b.get("cfg") or {})
     except ValueError as e:
         return _json({"ok": False, "loi": str(e)}, 400)
     real = ab_fetch_balance(s.jwt)
@@ -8727,6 +8825,8 @@ def tool_autocuoc_start():
     else:                                                    # chạy TIẾP lịch sử cũ
         s.ledger.balance = real
     s.cfg = cfg
+    for x, nc in others:                                     # mục tiêu lãi + tự rút dùng chung: bàn kia nhận luôn
+        x.apply_cfg(nc)
     s.reset_state()
     s.hold, s._wd_fails, s._wd_next, s._bal_fail = False, 0, 0.0, 0
     if real < cfg["bet"]:
@@ -8737,6 +8837,7 @@ def tool_autocuoc_start():
 
 @app.route("/tool/autocuoc/api/config", methods=["POST"])
 def tool_autocuoc_config():
+    """Lưu cấu hình. Gửi kèm khoá RIÊNG của bàn (cược gốc, thua / thắng, x2, giảm cược, pause) -> chỉ bàn đó đổi; khoá CHUNG (mục tiêu lãi, tự rút) -> cả 2 bàn đổi."""
     g = _ab_gate()
     if g is not None:
         return g
@@ -8745,10 +8846,12 @@ def tool_autocuoc_config():
     if s is None:
         return _json({"ok": False, "loi": "Không thấy tài khoản"}, 404)
     try:
-        cfg = ab_clean_cfg(b.get("cfg") or {}, s.cfg)
+        cfg, others = ab_prepare_cfg(s, b.get("cfg") or {})
     except ValueError as e:
         return _json({"ok": False, "loi": str(e)}, 400)
     s.apply_cfg(cfg)
+    for x, nc in others:
+        x.apply_cfg(nc)
     ab_save(force=True)
     return _json({"ok": True, "cfg": s.cfg})
 
@@ -8763,6 +8866,7 @@ def tool_autocuoc_action():
     if s is None:
         return _json({"ok": False, "loi": "Không thấy tài khoản"}, 404)
     act = b.get("act")
+    grp = [s] + _ab_siblings(s)                              # cả tài khoản (2 bàn)
     if act == "hold":
         s.hold = True
         s.log("info", "Tạm dừng thủ công — không đặt cược mới")
@@ -8771,8 +8875,21 @@ def tool_autocuoc_action():
         s.log("info", "Tiếp tục cược")
     elif act == "stop":
         s.stop("stopped", "Đã dừng auto cược")
+    elif act == "hold_all":
+        for x in grp:
+            if x.alive and not x.hold:
+                x.hold = True
+                x.log("info", "Tạm dừng thủ công — không đặt cược mới")
+    elif act == "unhold_all":
+        for x in grp:
+            if x.alive and x.hold:
+                x.hold = False
+                x.log("info", "Tiếp tục cược")
+    elif act == "stop_all":
+        for x in grp:
+            if x.alive:
+                x.stop("stopped", "Đã dừng auto cược")
     elif act == "remove":
-        grp = [s] + _ab_siblings(s)                          # xoá tài khoản = xoá cả 2 bàn (MD5 + Hũ)
         if any(x.alive for x in grp):
             return _json({"ok": False, "loi": "Dừng auto cược cả 2 bàn trước khi xoá tài khoản"}, 409)
         with _ab_lock:
@@ -8827,7 +8944,7 @@ def ab_strategy(cfg, label="LC MD5"):
         dong.append(f"Thua {gi('pause_streak', 5)} ván liên tiếp → pause (theo dõi ảo), thắng {gi('resume_wins')} ván liên tiếp thì cược lại")
     if c.get("target_on") and gi("target") > 0:
         tail = (" → dừng + tự rút về " + ("Momo" if c.get("wd_kind") == "momo" else "Ngân hàng")) if (c.get("target_wd") or c.get("wd_on")) else " → dừng cược"
-        dong.append(f"Mục tiêu lãi {gi('target'):,}" + tail)
+        dong.append(f"Mục tiêu lãi chung (MD5 + Hũ) {gi('target'):,}" + tail)
     dong.append("Số dư về 0 → tự dừng hẳn auto cược")
     if lm == "x2":
         ten = "Gấp thếp (x2 khi thua)"
@@ -8937,243 +9054,252 @@ AB_HTML = r"""<!doctype html>
 <title>Auto cược LC79</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800;900&family=Orbitron:wght@600;800;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Unbounded:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#07041c; --card:#140b3a; --bg2:rgba(24,14,66,.74); --surf:rgba(38,24,96,.82); --surf2:rgba(70,44,160,.5);
-  --line:rgba(160,130,255,.24); --line2:rgba(185,155,255,.42);
-  --tx:#f6f2ff; --mut:#b4acE4; --dim:#8a81c0;
-  --up:#2dff9c; --up2:rgba(45,255,156,.16); --dn:#ff4d79; --dn2:rgba(255,77,121,.18);
-  --gold:#ffd23f; --gold2:rgba(255,210,63,.17); --sky:#27e6ff; --pink:#ff3fa4; --vio:#9b6bff;
-  --grad:linear-gradient(115deg,#ff3fa4 0%,#9b6bff 48%,#27e6ff 100%);
-  --r:18px; color-scheme:dark;
+  --ink:#060a13; --ink2:#0a1020; --pan:#0f1729; --pan2:#141f36; --line:#22304d; --line2:#34476f;
+  --tx:#e8eefb; --mut:#8c9aba; --dim:#5d6a8a;
+  --md5:#4cc9ff; --md5d:rgba(76,201,255,.13); --hu:#ffb020; --hud:rgba(255,176,32,.13);
+  --vault:#b690ff; --vaultd:rgba(182,144,255,.13);
+  --up:#3ddc97; --upd:rgba(61,220,151,.14); --dn:#ff5d73; --dnd:rgba(255,93,115,.15);
+  --gold:#ffd166; --r:18px; --r2:12px; color-scheme:dark;
 }
-*{box-sizing:border-box;margin:0;padding:0;scrollbar-width:thin;scrollbar-color:#6d4bd6 transparent}
-html{background:var(--bg)}
-body{font-family:'Be Vietnam Pro',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--tx);min-height:100vh;font-size:14px;line-height:1.45;font-variant-numeric:tabular-nums;
-  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
-button,input,select{font:inherit;color:inherit}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{min-height:100vh;background:var(--ink);color:var(--tx);font:14px/1.5 'Be Vietnam Pro',system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+button,input{font:inherit;color:inherit}
 button{cursor:pointer}
-:focus-visible{outline:2px solid var(--sky);outline-offset:2px}
-.up{color:var(--up)} .dn{color:var(--dn)} .gold{color:var(--gold)} .mut{color:var(--mut)}
+.num{font-family:'Unbounded','Be Vietnam Pro',system-ui,sans-serif;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.up{color:var(--up)}.dn{color:var(--dn)}.gold{color:var(--gold)}.mut{color:var(--mut)}
+.bgfx{position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:radial-gradient(640px 420px at 8% -6%,rgba(76,201,255,.16),transparent 70%),radial-gradient(640px 420px at 96% -4%,rgba(255,176,32,.12),transparent 70%),radial-gradient(900px 500px at 50% 118%,rgba(182,144,255,.12),transparent 70%)}
+.bgfx::after{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(140,160,210,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(140,160,210,.05) 1px,transparent 1px);background-size:46px 46px;-webkit-mask-image:linear-gradient(180deg,#000,transparent 70%);mask-image:linear-gradient(180deg,#000,transparent 70%)}
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:60;display:none;max-width:min(92vw,520px);padding:12px 18px;border-radius:14px;background:#1b2745;border:1px solid var(--line2);box-shadow:0 18px 50px rgba(0,0,0,.55);font-weight:600}
 
-/* nền cực quang */
-.bg-fx{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
-.bg-fx i{position:absolute;width:62vmax;height:62vmax;border-radius:50%;animation:drift 24s ease-in-out infinite alternate}
-.bg-fx i:nth-child(1){background:radial-gradient(closest-side,rgba(255,63,164,.42),transparent);left:-22vmax;top:-26vmax}
-.bg-fx i:nth-child(2){background:radial-gradient(closest-side,rgba(91,59,255,.5),transparent);right:-24vmax;top:4vmax;animation-duration:30s}
-.bg-fx i:nth-child(3){background:radial-gradient(closest-side,rgba(18,216,255,.32),transparent);left:16vmax;bottom:-40vmax;animation-duration:36s}
-@keyframes drift{to{transform:translate3d(7vmax,5vmax,0) scale(1.14)}}
+/* ── khung ── */
+.app{position:relative;z-index:1;display:grid;grid-template-columns:272px minmax(0,1fr);min-height:100vh}
+.rail{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:14px;padding:20px 14px 16px;background:linear-gradient(180deg,rgba(10,16,32,.92),rgba(7,11,22,.96));border-right:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:12px;padding:2px 6px 10px}
+.mark{width:42px;height:42px;flex:none}
+.brand b{display:block;font-size:19px;font-weight:800;letter-spacing:-.01em;line-height:1.15}
+.brand small{color:var(--mut);font-size:12px}
+.accs{display:flex;flex-direction:column;gap:8px;overflow:auto;flex:1;min-height:0;padding:2px}
+.acc{display:grid;grid-template-columns:38px minmax(0,1fr) auto;align-items:center;gap:11px;width:100%;text-align:left;padding:11px 12px;border-radius:14px;border:1px solid var(--line);background:var(--pan);transition:border-color .15s,background .15s}
+.acc:hover{border-color:var(--line2)}
+.acc.sel{border-color:transparent;background:linear-gradient(var(--pan2),var(--pan2)) padding-box,linear-gradient(120deg,var(--md5),var(--vault) 55%,var(--hu)) border-box;border:1.5px solid transparent;box-shadow:0 10px 34px -14px rgba(182,144,255,.55)}
+.av{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;font-weight:800;font-size:16px;background:linear-gradient(135deg,var(--md5d),var(--hud));border:1px solid var(--line2)}
+.ab{min-width:0;display:flex;flex-direction:column;gap:5px}
+.an{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ap{display:flex;gap:5px}
+.pl{font-style:normal;font-size:10.5px;font-weight:800;padding:1px 7px;border-radius:99px;border:1px solid var(--line2);color:var(--dim)}
+.pl.md5{--c:var(--md5)}.pl.hu{--c:var(--hu)}
+.pl.running{background:var(--c);border-color:var(--c);color:#04101a;box-shadow:0 0 12px -2px var(--c)}
+.pl.paused,.pl.hold{border:1px dashed var(--c);color:var(--c)}
+.pl.target{border-color:var(--vault);color:var(--vault)}
+.pl.nofund,.pl.error,.pl.expired,.pl.restart{border-color:var(--dn);color:var(--dn)}
+.ax{font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums}
+.add{height:44px;border-radius:13px;border:1.5px dashed var(--line2);background:transparent;color:var(--mut);font-weight:700}
+.add:hover{color:var(--tx);border-color:var(--md5)}
+.rail-foot .add{width:100%;height:38px;font-size:12.5px;border-style:solid;border-color:var(--line)}
+.main{padding:22px 30px 70px;min-width:0;max-width:1320px;width:100%}
 
-/* cổng duyệt thiết bị */
-#gate{position:fixed;inset:0;z-index:50;display:grid;place-items:center;background:var(--bg);padding:24px;text-align:center}
-#gate .box{max-width:380px}
-#gate h2{font-size:20px;font-weight:800;margin-bottom:8px}
-#gate p{color:var(--mut)}
-#gate .dot{width:12px;height:12px;border-radius:50%;background:var(--gold);margin:0 auto 18px;animation:pulse 1.4s infinite}
-@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,210,63,.6)}100%{box-shadow:0 0 0 16px rgba(255,210,63,0)}}
+/* ── bảng giá trực tiếp ── */
+.ticker{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+.tk{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;padding:11px 16px;border-radius:14px;background:var(--pan);border:1px solid var(--line);border-left:4px solid var(--c)}
+.tk.md5{--c:var(--md5)}.tk.hu{--c:var(--hu)}
+.live{display:inline-flex;align-items:center;gap:6px;font-weight:800;color:var(--c)}
+.live::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--c);box-shadow:0 0 0 0 var(--c);animation:ping 1.8s infinite}
+@keyframes ping{70%{box-shadow:0 0 0 8px transparent}100%{box-shadow:0 0 0 0 transparent}}
+.tk .ph{font-weight:700}.tk .bk{margin-left:auto;display:flex;align-items:center;gap:7px;color:var(--mut);font-size:13px}
+.sd{display:inline-block;font-size:11.5px;font-weight:800;padding:2px 10px;border-radius:8px}
+.sd.t{background:rgba(255,176,32,.18);color:#ffc24d}.sd.x{background:rgba(76,201,255,.18);color:#6dd4ff}.sd.n{background:var(--pan2);color:var(--dim)}
+.dice{display:inline-flex;gap:4px}.dice i{font-style:normal;width:22px;height:22px;border-radius:6px;background:#e9eefb;color:#0a1020;display:grid;place-items:center;font-weight:800;font-size:12px}
 
-/* khung */
-.app{position:relative;z-index:1;display:grid;grid-template-columns:278px minmax(0,1fr);min-height:100vh}
-.rail{border-right:1px solid var(--line);background:linear-gradient(180deg,rgba(22,12,64,.88),rgba(7,4,28,.92));backdrop-filter:blur(14px);padding:22px 16px;display:flex;flex-direction:column;gap:18px;position:sticky;top:0;height:100vh;overflow:auto}
-.brand{display:flex;align-items:center;gap:12px;padding:0 4px}
-.brand .logo{font-style:normal;flex:none;width:46px;height:46px;border-radius:15px;display:grid;place-items:center;font-size:24px;background:var(--grad);box-shadow:0 0 24px rgba(255,63,164,.6);animation:float 3.4s ease-in-out infinite}
-.brand b{display:block;font-size:18px;font-weight:900;letter-spacing:.6px;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
-.brand span{color:var(--mut);font-size:11.5px}
-@keyframes float{50%{transform:translateY(-3px) rotate(-7deg)}}
-.acc-list{display:flex;flex-direction:column;gap:8px}
-.acc{display:grid;grid-template-columns:auto 1fr auto;gap:2px 10px;align-items:center;text-align:left;width:100%;padding:12px 13px;border-radius:15px;border:1px solid var(--line);background:var(--bg2);transition:transform .15s,border-color .15s}
-.acc:hover{border-color:var(--line2);transform:translateX(3px)}
-.acc.sel{border-color:transparent;background:linear-gradient(var(--card),var(--card)) padding-box,var(--grad) border-box;box-shadow:0 0 24px rgba(155,107,255,.4)}
-.acc .st{grid-row:1/3;width:10px;height:10px;border-radius:50%;background:var(--dim)}
-.acc .st.running{background:var(--up);box-shadow:0 0 10px var(--up);animation:pulse2 1.8s infinite}
-.acc .st.paused,.acc .st.hold{background:var(--gold);box-shadow:0 0 10px var(--gold)}
-.acc .st.nofund,.acc .st.error,.acc .st.restart{background:var(--dn);box-shadow:0 0 10px var(--dn)}
-@keyframes pulse2{0%{box-shadow:0 0 0 0 rgba(45,255,156,.65)}100%{box-shadow:0 0 0 10px rgba(45,255,156,0)}}
-.acc .nm{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.acc .nm .tb{font-style:normal;font-size:10.5px;font-weight:800;padding:1px 8px;border-radius:99px;margin-left:6px;background:var(--gold2);color:var(--gold)}
-.acc .nm .tb.lchu{background:rgba(39,230,255,.16);color:var(--sky)}
-.acc .pl{font-weight:800;font-size:13px}
-.acc .sub{grid-column:2/4;color:var(--mut);font-size:12px}
-.btn-add{border:1.5px dashed var(--line2);background:transparent;border-radius:15px;padding:12px;color:var(--mut);font-weight:700;transition:.15s}
-.btn-add:hover{color:#fff;border-color:var(--pink);background:rgba(255,63,164,.12)}
-.rail .foot{margin-top:auto;color:var(--dim);font-size:11.5px;padding:0 6px;display:none}
-.main{padding:22px clamp(16px,3vw,36px) 48px;display:flex;flex-direction:column;gap:20px;min-width:0;max-width:1280px;width:100%}
+/* ── hero ── */
+.hero{display:grid;grid-template-columns:minmax(300px,360px) minmax(0,1fr);gap:0;border-radius:22px;background:var(--pan);border:1px solid var(--line);overflow:hidden;margin-bottom:18px}
+.hero-l{padding:24px 24px 20px;display:flex;flex-direction:column;gap:18px;border-right:1px solid var(--line);background:linear-gradient(160deg,rgba(76,201,255,.07),transparent 45%),linear-gradient(20deg,rgba(255,176,32,.06),transparent 50%)}
+.idr{display:flex;align-items:center;gap:13px}
+.idr .av{width:48px;height:48px;border-radius:15px;font-size:20px}
+.idr h1{margin:0;font-size:20px;font-weight:800;letter-spacing:-.01em;line-height:1.2;word-break:break-all}
+.ids{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:3px;font-size:12.5px}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:3px 11px;border-radius:99px;background:var(--pan2);border:1px solid var(--line2);color:var(--mut)}
+.chip::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.chip.running{color:var(--up);background:var(--upd);border-color:rgba(61,220,151,.4)}
+.chip.running::before{animation:ping2 1.6s infinite}
+@keyframes ping2{50%{opacity:.25}}
+.chip.paused,.chip.hold{color:var(--hu);background:var(--hud);border-color:rgba(255,176,32,.4)}
+.chip.target{color:var(--vault);background:var(--vaultd);border-color:rgba(182,144,255,.45)}
+.chip.nofund,.chip.error,.chip.expired,.chip.restart{color:var(--dn);background:var(--dnd);border-color:rgba(255,93,115,.45)}
+.figs{display:grid;gap:14px}
+.fig .fl{display:block;color:var(--mut);font-size:12.5px;margin-bottom:2px}
+.fig b{display:block;font-size:30px;font-weight:700;line-height:1.15;word-break:break-all}
+.fig.net b{font-size:38px}
+.fig b small{font-family:'Be Vietnam Pro',sans-serif;font-size:13px;font-weight:600;color:var(--mut);margin-left:5px;letter-spacing:0}
+.mini{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.mini div{padding:9px 11px;border-radius:12px;background:rgba(6,10,19,.55);border:1px solid var(--line)}
+.mini div>span:first-child{display:block;font-size:11.5px;color:var(--mut)}.mini b{display:block;font-size:14.5px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:auto}
+.btn{height:42px;padding:0 18px;border-radius:12px;border:1px solid var(--line2);background:var(--pan2);font-weight:700;transition:transform .1s,border-color .15s}
+.btn:hover{border-color:var(--tx)}.btn:active{transform:translateY(1px)}
+.btn:disabled{opacity:.5;cursor:wait}
+.btn.go{border:0;background:linear-gradient(110deg,var(--md5),var(--up) 55%,var(--hu));color:#04121a;box-shadow:0 10px 30px -10px rgba(61,220,151,.6)}
+.btn.warn{border-color:rgba(255,176,32,.55);color:var(--hu)}
+.btn.stop{border-color:rgba(255,93,115,.55);color:var(--dn)}
+.btn.ghost{background:transparent;color:var(--mut);border-color:var(--line)}
+.btn.sm{height:34px;padding:0 13px;font-size:12.5px;border-radius:10px}
+.hero-r{padding:18px 20px 14px;min-width:0;display:flex;flex-direction:column}
+.cbar{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px;margin-bottom:8px}
+.seg{display:inline-flex;padding:3px;border-radius:11px;background:rgba(6,10,19,.7);border:1px solid var(--line);gap:2px}
+.seg button{border:0;background:transparent;padding:6px 13px;border-radius:8px;color:var(--mut);font-weight:700;font-size:12.5px;white-space:nowrap}
+.seg button.on{background:var(--pan2);color:var(--tx);box-shadow:inset 0 0 0 1px var(--line2)}
+.seg.src button[data-v="lcmd5"].on{box-shadow:inset 0 0 0 1px var(--md5);color:var(--md5)}
+.seg.src button[data-v="lchu"].on{box-shadow:inset 0 0 0 1px var(--hu);color:var(--hu)}
+#chartwrap{position:relative;flex:1;min-height:290px}
+#chart{position:absolute;inset:0;width:100%;height:100%;display:block}
+#tip{position:absolute;display:none;pointer-events:none;z-index:3;padding:9px 12px;border-radius:11px;background:#0b1325;border:1px solid var(--line2);font-size:12.5px;line-height:1.55;box-shadow:0 14px 40px rgba(0,0,0,.55);white-space:nowrap}
+#tip b{display:block}
+.empty{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--mut);padding:0 24px}
 
-/* dải phiên trực tiếp */
-.feed{display:flex;flex-wrap:wrap;align-items:center;gap:8px 24px;padding:11px 18px 11px 14px;border:1px solid var(--line);border-radius:var(--r);background:var(--bg2);backdrop-filter:blur(10px)}
-.feed::before{content:"● LIVE";font-weight:900;font-size:11.5px;letter-spacing:.6px;color:#fff;background:linear-gradient(90deg,#ff3d5e,#ff3fa4);padding:3px 11px;border-radius:99px;animation:blink 1.6s infinite}
-.feed:has(>.dn)::before{content:"● LỖI";background:#4a3f80;animation:none}
-@keyframes blink{50%{opacity:.6;box-shadow:0 0 16px #ff3d5e}}
-.feed .k{color:var(--mut);margin-right:6px;font-weight:700}
-.pill{display:inline-block;padding:3px 12px;border-radius:99px;font-weight:900;font-size:13px}
-.pill.t{background:linear-gradient(135deg,#ffb300,#ff7a00);color:#2a1500;box-shadow:0 0 14px rgba(255,160,0,.55)}
-.pill.x{background:linear-gradient(135deg,#27e6ff,#3b7bff);color:#021a33;box-shadow:0 0 14px rgba(39,230,255,.5)}
-.pill.n{background:var(--surf2);color:var(--mut)}
-.dice{display:inline-flex;gap:5px;vertical-align:middle}
-.dice i{font-style:normal;display:grid;place-items:center;width:23px;height:23px;border-radius:7px;background:#fff;color:#2a1a66;font-size:13px;font-weight:800;box-shadow:0 2px 0 #b9a8ff}
+/* ── 2 bàn ── */
+.decks{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:stretch}
+.deck{--c:var(--md5);--cd:var(--md5d);position:relative;display:flex;flex-direction:column;border-radius:var(--r);background:linear-gradient(180deg,var(--cd),transparent 150px),var(--pan);border:1px solid var(--line);overflow:hidden}
+.deck.hu{--c:var(--hu);--cd:var(--hud)}
+.deck::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:var(--c);box-shadow:0 0 22px 1px var(--c)}
+.dk-h{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:20px 20px 4px}
+.dk-t{display:flex;align-items:center;gap:11px}
+.dk-t i{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;background:var(--cd);border:1px solid var(--c);color:var(--c);font-style:normal;font-weight:800;font-size:11.5px}
+.dk-t h3{margin:0;font-size:17px;font-weight:800;line-height:1.2}.dk-t small{color:var(--mut);font-size:12px}
+.dk-s{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:12px 20px 4px}
+.dk-s div{padding:8px 10px;border-radius:11px;background:rgba(6,10,19,.5);border:1px solid var(--line);min-width:0}
+.dk-s div>span:first-child{display:block;font-size:11px;color:var(--mut);white-space:nowrap}.dk-s b{display:block;font-size:13.5px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dk-a{display:flex;flex-wrap:wrap;gap:8px;padding:12px 20px 6px}
+.dk-a .btn.go{background:var(--c);box-shadow:0 10px 26px -10px var(--c)}
+.dk-c{padding:6px 20px 8px}
+.rw{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 0;border-top:1px solid var(--line)}
+.rt{min-width:0}.rt b{display:block;font-weight:700;font-size:13.5px}.rt small{display:block;color:var(--mut);font-size:12px;line-height:1.35;margin-top:1px}
+.sub{margin:-2px 0 12px;padding:10px 13px;border-radius:11px;background:rgba(6,10,19,.55);border:1px dashed var(--line2);color:var(--mut);font-size:13px;display:flex;flex-wrap:wrap;align-items:center;gap:7px}
+.ni{height:36px;width:84px;padding:0 10px;border-radius:9px;border:1px solid var(--line2);background:var(--ink);color:var(--tx);text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+.ni:focus,.fi:focus{outline:0;border-color:var(--c,var(--md5));box-shadow:0 0 0 3px rgba(76,201,255,.15)}
+.betbox{padding:12px 0 6px}
+.money{display:flex;align-items:center;gap:8px;margin-top:8px;height:54px;padding:0 16px;border-radius:14px;background:var(--ink);border:1px solid var(--line2)}
+.money:focus-within{border-color:var(--c,var(--md5))}
+.money input{flex:1;min-width:0;border:0;background:transparent;font:700 24px 'Unbounded','Be Vietnam Pro',sans-serif;letter-spacing:-.03em;outline:0}
+.money em{font-style:normal;color:var(--mut);font-weight:700}
+.qk{display:flex;gap:7px;margin-top:9px;flex-wrap:wrap}
+.qk button{height:30px;padding:0 13px;border-radius:99px;border:1px solid var(--line2);background:var(--pan2);font-weight:700;font-size:12.5px;color:var(--mut)}
+.qk button:hover{color:var(--tx);border-color:var(--c,var(--md5))}
+.sw{position:relative;flex:none;width:44px;height:25px;display:inline-block}
+.sw input{position:absolute;opacity:0;inset:0;width:100%;height:100%;margin:0;cursor:pointer;z-index:1}
+.sw span{position:absolute;inset:0;border-radius:99px;background:var(--pan2);border:1px solid var(--line2);transition:.18s}
+.sw span::after{content:"";position:absolute;left:3px;top:3px;width:17px;height:17px;border-radius:50%;background:var(--dim);transition:.18s}
+.sw input:checked+span{background:var(--c,var(--md5));border-color:var(--c,var(--md5))}
+.sw input:checked+span::after{left:22px;background:#06121c}
+.sw input:focus-visible+span{box-shadow:0 0 0 3px rgba(76,201,255,.35)}
+.ck{display:inline-flex;align-items:center;gap:7px;color:var(--tx);font-weight:600}
+.ck input{accent-color:var(--c,var(--md5));width:16px;height:16px}
+.dk-f{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:2px 20px 16px;min-height:38px;margin-top:auto}
+.sv{font-size:12px;color:var(--dim);font-weight:600}.sv.ok{color:var(--up)}.sv.bad{color:var(--dn)}
+.err{margin:0 20px 12px;padding:9px 13px;border-radius:11px;background:var(--dnd);border:1px solid rgba(255,93,115,.4);color:#ff9aa9;font-size:13px;font-weight:600}
 
-/* hero: lãi/lỗ + biểu đồ */
-.hero{border:1.5px solid transparent;border-radius:24px;background:linear-gradient(var(--card),#0d0628) padding-box,linear-gradient(115deg,#ff3fa4,#9b6bff,#27e6ff,#2dff9c,#ff3fa4) border-box;background-size:100% 100%,300% 100%;animation:flow 8s ease-in-out infinite alternate;box-shadow:0 0 40px rgba(155,107,255,.3),0 18px 50px rgba(0,0,0,.45);padding:22px 24px 14px;position:relative;overflow:hidden}
-@keyframes flow{to{background-position:0 0,100% 0}}
-.hero::before{content:"";position:absolute;right:-90px;top:-100px;width:340px;height:340px;border-radius:50%;background:radial-gradient(closest-side,rgba(255,63,164,.3),transparent);pointer-events:none}
-.hero-top{display:flex;flex-wrap:wrap;justify-content:space-between;gap:14px 20px;align-items:flex-start;position:relative}
-.who{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.who h1{font-size:15px;font-weight:700;color:var(--mut)}
-.chip{display:inline-flex;align-items:center;gap:7px;padding:4px 13px;border-radius:99px;font-size:12.5px;font-weight:800;background:var(--surf2);color:var(--mut)}
-.chip.running{background:var(--up2);color:var(--up);box-shadow:0 0 14px rgba(45,255,156,.3)} .chip.paused,.chip.hold{background:var(--gold2);color:var(--gold)}
-.chip.nofund,.chip.error,.chip.restart{background:var(--dn2);color:var(--dn)} .chip.target{background:var(--up2);color:var(--up)}
-.net{font-family:'Orbitron','Be Vietnam Pro',system-ui,sans-serif;font-size:clamp(32px,5.8vw,60px);font-weight:900;letter-spacing:-.5px;line-height:1.12;margin-top:8px}
-.net.up{color:var(--up);text-shadow:0 0 14px rgba(45,255,156,.75),0 0 48px rgba(45,255,156,.4)}
-.net.dn{color:var(--dn);text-shadow:0 0 14px rgba(255,77,121,.75),0 0 48px rgba(255,77,121,.4)}
-.net small{font-family:'Be Vietnam Pro',system-ui,sans-serif;font-size:.26em;font-weight:700;letter-spacing:0;text-shadow:none;color:var(--mut);margin-left:10px}
-.actions{display:flex;gap:8px;flex-wrap:wrap}
-.btn{border:1px solid var(--line2);background:var(--surf2);border-radius:12px;padding:9px 18px;font-weight:800;transition:transform .15s,box-shadow .15s,border-color .15s}
-.btn:hover{border-color:#fff;transform:translateY(-1px)}
-.btn.go{border:0;background:linear-gradient(120deg,#2dff9c,#27e6ff);color:#02261b;box-shadow:0 0 22px rgba(45,255,156,.5)}
-.btn.go:hover{box-shadow:0 0 36px rgba(45,255,156,.85)}
-.btn.warn{color:var(--gold);border-color:rgba(255,210,63,.55);background:var(--gold2)}
-.btn.stop{border:0;color:#fff;background:linear-gradient(120deg,#ff3d5e,#ff3fa4);box-shadow:0 0 18px rgba(255,61,94,.5)}
-.btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
-.chart-bar{display:flex;justify-content:space-between;align-items:center;margin:14px 0 4px;gap:10px;flex-wrap:wrap;position:relative}
-.seg{display:inline-flex;background:rgba(7,4,28,.75);border:1px solid var(--line);border-radius:12px;padding:3px}
-.seg button{border:0;background:transparent;padding:6px 13px;border-radius:9px;color:var(--mut);font-weight:700;font-size:13px}
-.seg button.on{background:var(--grad);color:#fff;box-shadow:0 0 14px rgba(155,107,255,.6)}
-#chartwrap{position:relative;height:300px}
-#chart{width:100%;height:100%;display:block}
-#tip{position:absolute;pointer-events:none;background:rgba(10,5,36,.96);border:1px solid var(--line2);border-radius:12px;padding:9px 12px;font-size:12.5px;min-width:150px;display:none;z-index:3;box-shadow:0 0 22px rgba(155,107,255,.4)}
-#tip b{display:block;margin-bottom:2px}
-.empty{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--mut);padding:20px}
-.empty[hidden],.app[hidden]{display:none}
+/* ── cầu nối + ví chung ── */
+.bridge{position:relative;height:50px}
+.bridge .arm{position:absolute;top:0;width:25%;height:26px;border:2px solid;border-top:0;opacity:.85}
+.bridge .arm.l{left:25%;border-color:var(--md5);border-right:0;border-radius:0 0 0 16px}
+.bridge .arm.r{right:25%;border-color:var(--hu);border-left:0;border-radius:0 0 16px 0}
+.bridge .stem{position:absolute;left:50%;top:26px;bottom:0;width:2px;margin-left:-1px;background:linear-gradient(var(--hu),var(--vault))}
+.bridge .tag{position:absolute;left:50%;top:7px;transform:translateX(-50%);padding:2px 12px;border-radius:99px;background:var(--ink2);border:1px solid var(--vault);color:var(--vault);font-size:12px;font-weight:800;white-space:nowrap;z-index:1}
+.vault{--c:var(--vault);position:relative;border-radius:var(--r);background:linear-gradient(135deg,var(--vaultd),transparent 55%),var(--pan);border:1px solid rgba(182,144,255,.42);overflow:hidden;box-shadow:0 20px 60px -30px rgba(182,144,255,.55)}
+.vt{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:20px 22px 0}
+.vt h3{margin:0;font-size:18px;font-weight:800}.vt small{display:block;color:var(--mut);font-size:12.5px;margin-top:2px}
+.vbadge{padding:5px 13px;border-radius:99px;border:1px solid var(--vault);background:var(--vaultd);color:var(--vault);font-weight:800;font-size:12px}
+.prog{margin:16px 22px 0}
+.pbar{height:11px;border-radius:99px;background:var(--ink);border:1px solid var(--line);overflow:hidden}
+.pbar i{display:block;height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,var(--md5),var(--vault) 55%,var(--hu));transition:width .5s}
+.ptx{display:flex;justify-content:space-between;gap:10px;margin-top:6px;font-size:12.5px;color:var(--mut);font-weight:600;flex-wrap:wrap}
+.vg{display:grid;grid-template-columns:1fr 1fr;gap:0 26px;padding:6px 22px 8px}
+.vg>div{min-width:0}
+.gl{font-size:12.5px;color:var(--mut);font-weight:600;margin:6px 0 2px}
+.fi{width:100%;height:42px;margin-top:8px;padding:0 13px;border-radius:11px;border:1px solid var(--line2);background:var(--ink);color:var(--tx)}
+.kind{display:flex;width:100%}.kind button{flex:1;height:38px}
+.pull{margin-top:10px;width:100%}
+.wlist{display:grid;gap:7px;margin-top:8px}
+.wcard{text-align:left;padding:9px 13px;border-radius:11px;border:1px solid var(--line2);background:var(--pan2)}
+.wcard.on{border-color:var(--vault);background:var(--vaultd)}
+.wcard b{display:block;font-size:13px}.wcard small{color:var(--mut)}
+.wsum{margin-top:12px;padding:11px 14px;border-radius:12px;background:var(--vaultd);border:1px solid rgba(182,144,255,.4);font-size:13px;line-height:1.55}
+.hint{margin-top:8px;color:var(--dim);font-size:12px}
+.vault .dk-f{padding-top:6px}
 
-/* 4 ô số liệu nhiều màu */
-.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
-.metrics>div{padding:15px 18px;border-radius:var(--r);border:1px solid var(--c1);background:linear-gradient(145deg,var(--c2),rgba(20,11,58,.88) 72%)}
-.m1{--c1:rgba(255,210,63,.55);--c2:rgba(255,210,63,.24)} .m2{--c1:rgba(255,63,164,.55);--c2:rgba(255,63,164,.24)}
-.m3{--c1:rgba(45,255,156,.55);--c2:rgba(45,255,156,.2)} .m4{--c1:rgba(39,230,255,.55);--c2:rgba(39,230,255,.2)}
-.metrics .l{color:var(--mut);font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:7px}
-.metrics .l b{font-size:17px;font-weight:400}
-.metrics .v{font-family:'Orbitron','Be Vietnam Pro',system-ui,sans-serif;font-size:21px;font-weight:800;margin-top:5px}
-.metrics .s{color:var(--mut);font-size:12px;margin-top:2px}
+/* ── hoạt động ── */
+.act{margin-top:18px;border-radius:var(--r);background:var(--pan);border:1px solid var(--line);overflow:hidden}
+.act-h{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line)}
+.list{max-height:420px;overflow:auto;padding:6px 8px 10px}
+.it{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;font-size:13px}
+.it:nth-child(even){background:rgba(6,10,19,.4)}
+.it .ph{color:var(--dim);font-variant-numeric:tabular-nums}.it .am{font-weight:700;font-variant-numeric:tabular-nums}
+.it.open{background:var(--hud);outline:1px dashed rgba(255,176,32,.5)}
+.tg{font-style:normal;font-size:10.5px;font-weight:800;padding:1px 8px;border-radius:99px;border:1px solid var(--c);color:var(--c)}
+.tg.md5{--c:var(--md5)}.tg.hu{--c:var(--hu)}
+.lg{display:grid;grid-template-columns:62px auto minmax(0,1fr);gap:10px;padding:7px 10px;font-size:13px;border-radius:10px}
+.lg .tm{color:var(--dim);font-variant-numeric:tabular-nums}
+.lg.win,.lg.wd{color:var(--up)}.lg.loss,.lg.error{color:#ff8d9d}.lg.warn,.lg.pause{color:var(--gold)}.lg.virt,.lg.info{color:var(--mut)}.lg.bet{color:var(--tx)}
+.nothing{padding:34px 16px;text-align:center;color:var(--dim)}
 
-/* hai cột */
-.cols{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);gap:20px;align-items:start}
-.panel{border:1px solid var(--line);border-radius:var(--r);background:var(--bg2);backdrop-filter:blur(10px);overflow:hidden}
-.panel>h3{font-size:15px;font-weight:800;padding:15px 18px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:10px;background:linear-gradient(90deg,rgba(255,63,164,.2),rgba(39,230,255,.1))}
-.panel>h3 .saved{font-size:12px;font-weight:600;color:var(--mut)}
-.row{display:grid;grid-template-columns:1fr auto;gap:6px 14px;align-items:center;padding:14px 18px 14px 21px;border-bottom:1px solid var(--line);box-shadow:inset 4px 0 0 var(--ac,var(--vio))}
-.row:last-child{border-bottom:0}
-#cfgbox>.row:nth-child(1){--ac:var(--gold)} #cfgbox>.row:nth-child(2){--ac:var(--pink)} #cfgbox>.row:nth-child(3){--ac:var(--vio)}
-#cfgbox>.row:nth-child(4){--ac:var(--up)} #cfgbox>.row:nth-child(5){--ac:var(--sky)} #cfgbox>.row:nth-child(6){--ac:#ff8a3d}
-.row .t{font-weight:700}
-.row .d{color:var(--mut);font-size:12.5px;grid-column:1}
-.row .sub{grid-column:1/3;display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;color:var(--mut);font-size:13px;padding-top:2px}
-.row .sub[hidden]{display:none}
-.sw{position:relative;width:46px;height:27px;flex:none}
-.sw input{position:absolute;inset:0;opacity:0;cursor:pointer;margin:0;width:100%;height:100%;z-index:1}
-.sw span{position:absolute;inset:0;border-radius:99px;background:rgba(7,4,28,.85);border:1px solid var(--line2);transition:background .18s}
-.sw span::after{content:"";position:absolute;top:3px;left:3px;width:19px;height:19px;border-radius:50%;background:var(--mut);transition:transform .18s,background .18s}
-.sw input:checked+span{background:linear-gradient(120deg,#2dff9c,#27e6ff);border-color:transparent;box-shadow:0 0 14px rgba(45,255,156,.65)}
-.sw input:checked+span::after{transform:translateX(19px);background:#fff}
-.sw input:focus-visible+span{outline:2px solid var(--sky);outline-offset:2px}
-.num{width:96px;background:var(--bg);border:1px solid var(--line2);border-radius:10px;padding:7px 10px;text-align:right;font-weight:700}
-.num.w{width:150px;text-align:left}
-.num:focus{border-color:var(--sky);outline:0;box-shadow:0 0 0 3px rgba(39,230,255,.22)}
-label.ck{display:inline-flex;align-items:center;gap:7px;cursor:pointer}
-label.ck input{accent-color:var(--pink);width:16px;height:16px}
-.mini{border:1px solid var(--line2);background:var(--surf2);border-radius:9px;padding:5px 11px;font-size:12.5px;font-weight:700}
-.err{color:var(--dn);padding:10px 18px;font-size:13px;border-top:1px solid var(--line)}
-/* thẻ "Dừng khi đạt lãi" */
-.goal{margin:14px;border:1.5px solid transparent;border-radius:18px;background:linear-gradient(var(--card),var(--card)) padding-box,linear-gradient(120deg,#ffd23f,#ff3fa4,#9b6bff) border-box;overflow:hidden;transition:box-shadow .2s}
-.goal.open{box-shadow:0 0 30px rgba(255,210,63,.32)}
-.goal-h{display:flex;align-items:center;gap:12px;padding:14px 16px}
-.goal-h.sm{padding:6px 0}
-.goal-ic{width:40px;height:40px;border-radius:13px;display:grid;place-items:center;font-size:20px;background:linear-gradient(135deg,#ffd23f,#ff7a00);box-shadow:0 0 16px rgba(255,170,0,.55);flex:none}
-.goal-t{flex:1;min-width:0}.goal-t .t{font-weight:800}.goal-t .d{color:var(--mut);font-size:12.5px;margin-top:1px}
-.goal-b{padding:0 16px 16px;display:flex;flex-direction:column;gap:10px}
-.goal-b[hidden],.wd-box[hidden]{display:none}
-.gl{font-size:12px;font-weight:700;color:var(--gold)}
-.money{display:flex;align-items:center;background:var(--bg);border:1px solid var(--line2);border-radius:13px;padding:0 14px}
-.money:focus-within{border-color:var(--gold);box-shadow:0 0 0 3px rgba(255,210,63,.22)}
-.money input{flex:1;min-width:0;background:none;border:0;outline:0;font-family:'Orbitron','Be Vietnam Pro',sans-serif;font-size:21px;font-weight:800;padding:11px 0;color:var(--gold)}
-.money em{font-style:normal;color:var(--mut);font-weight:800;font-size:13px}
-.chips{display:flex;gap:8px;flex-wrap:wrap}
-.chip-q{border:1px solid var(--line2);background:var(--surf2);border-radius:99px;padding:5px 14px;font-size:12.5px;font-weight:800;color:var(--tx);transition:.15s}
-.chip-q:hover{background:var(--grad);border-color:transparent;color:#fff;box-shadow:0 0 14px rgba(155,107,255,.55)}
-.goal-sep{height:1px;background:var(--line);margin:4px 0 0}
-.wd-box{display:flex;flex-direction:column;gap:10px;padding:14px;border-radius:13px;background:rgba(7,4,28,.7);border:1px dashed var(--line2)}
-.seg.big{display:flex}.seg.big button{flex:1;padding:9px 6px;font-size:14px}
-.mini.pull{align-self:flex-start}
-.wlist{display:flex;flex-direction:column;gap:6px}.wlist:empty{display:none}
-.wcard{display:flex;flex-direction:column;align-items:flex-start;gap:1px;text-align:left;border:1px solid var(--line2);background:var(--surf);border-radius:11px;padding:9px 12px;color:var(--tx)}
-.wcard small{color:var(--mut)}.wcard.on{border-color:var(--up);background:var(--up2)}
-.fi{width:100%;background:var(--bg);border:1px solid var(--line2);border-radius:11px;padding:10px 12px;color:var(--tx)}
-.fi:focus{border-color:var(--sky);outline:0;box-shadow:0 0 0 3px rgba(39,230,255,.22)}
-.wd-sum{font-size:13px;line-height:1.5;padding:10px 12px;border-radius:11px;background:var(--up2);color:var(--tx)}
-.wd-sum i{color:var(--gold);font-style:normal}
-.hint{font-size:12px;color:var(--dim)}
+/* ── đăng nhập ── */
+.login{max-width:520px;margin:6vh auto 0;padding:32px 30px;border-radius:24px;background:var(--pan);border:1px solid var(--line);box-shadow:0 30px 80px -30px rgba(0,0,0,.7)}
+.login h2{margin:0 0 6px;font-size:24px;font-weight:800;letter-spacing:-.01em}
+.login .lead{margin:0 0 20px;color:var(--mut)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 0 20px}
+.two div{padding:11px 13px;border-radius:12px;background:var(--ink);border:1px solid var(--line);border-left:3px solid var(--c);font-size:12.5px;color:var(--mut)}
+.two b{display:block;color:var(--tx);font-size:13.5px}
+.two .a{--c:var(--md5)}.two .b{--c:var(--hu)}.two .c{--c:var(--vault);grid-column:1/3}
+.fld{display:block;margin-bottom:14px}.fld>span{display:block;font-size:12.5px;font-weight:600;color:var(--mut);margin-bottom:6px}
+.fld input{width:100%;height:48px;padding:0 15px;border-radius:13px;border:1px solid var(--line2);background:var(--ink);font-size:16px}
+.fld input:focus{outline:0;border-color:var(--md5);box-shadow:0 0 0 3px rgba(76,201,255,.18)}
+.pwb{position:relative}.pwb input{padding-right:50px}
+.eye{position:absolute;right:6px;top:6px;width:36px;height:36px;border:0;border-radius:10px;background:transparent;color:var(--mut);display:grid;place-items:center}
+.eye:hover{color:var(--tx);background:var(--pan2)}.eye svg{width:20px;height:20px}
+.login .btn.go{width:100%;height:50px;font-size:15px}
+.msg{min-height:20px;margin-top:12px;color:var(--dn);font-weight:600}
 
-/* ván cược / nhật ký */
-.tabs{display:flex;border-bottom:1px solid var(--line);background:rgba(7,4,28,.5)}
-.tabs button{flex:1;border:0;background:transparent;padding:14px;font-weight:800;color:var(--mut);border-bottom:3px solid transparent}
-.tabs button.on{color:#fff;border-image:var(--grad) 1;background:linear-gradient(180deg,transparent,rgba(155,107,255,.18))}
-.list{max-height:520px;overflow:auto}
-.bet{display:grid;grid-template-columns:62px 1fr auto;gap:2px 10px;padding:11px 18px;border-bottom:1px solid var(--line);align-items:center}
-.bet.w{box-shadow:inset 4px 0 0 var(--up);background:linear-gradient(90deg,var(--up2),transparent 45%)}
-.bet.l{box-shadow:inset 4px 0 0 var(--dn);background:linear-gradient(90deg,var(--dn2),transparent 45%)}
-.bet .ph{color:var(--mut);font-size:12.5px}
-.bet .dt{font-size:13.5px;font-weight:600}
-.bet .am{font-family:'Orbitron','Be Vietnam Pro',sans-serif;font-weight:800;text-align:right;font-size:13.5px}
-.bet.open{background:var(--gold2);box-shadow:inset 4px 0 0 var(--gold)}
-.log{display:grid;grid-template-columns:54px 1fr;gap:10px;padding:9px 18px;border-bottom:1px solid var(--line);font-size:13px}
-.log .tm{color:var(--dim);font-size:12px}
-.log.warn,.log.error{color:var(--dn)} .log.wd,.log.pause{color:var(--gold)} .log.win{color:var(--up)} .log.loss{color:var(--tx)} .log.virt,.log.info,.log.bet{color:var(--mut)}
-.nothing{padding:36px 18px;text-align:center;color:var(--mut)}
+:focus-visible{outline:2px solid var(--md5);outline-offset:2px}
+::-webkit-scrollbar{width:9px;height:9px}::-webkit-scrollbar-thumb{background:var(--line2);border-radius:9px}::-webkit-scrollbar-track{background:transparent}
 
-/* đăng nhập */
-.login{max-width:520px;margin:6vh auto 0;border:1.5px solid transparent;border-radius:24px;background:linear-gradient(var(--card),#0d0628) padding-box,var(--grad) border-box;padding:30px;box-shadow:0 0 46px rgba(155,107,255,.32)}
-.login h2{font-size:26px;font-weight:900;letter-spacing:-.3px;margin-bottom:6px;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
-.login p.lead{color:var(--mut);margin-bottom:20px}
-.fld{display:block;margin-bottom:14px}
-.fld span{display:block;color:var(--mut);font-size:12.5px;font-weight:700;margin-bottom:5px}
-.fld input{width:100%;background:var(--bg);border:1px solid var(--line2);border-radius:12px;padding:12px 14px}
-.fld input:focus{border-color:var(--sky);outline:0;box-shadow:0 0 0 3px rgba(39,230,255,.22)}
-.pwb{position:relative}
-.pwb input{padding-right:46px}
-.pwb .eye{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:38px;height:38px;border:0;background:none;color:var(--mut);display:grid;place-items:center;border-radius:8px}
-.pwb .eye:hover{color:#fff}
-.pwb .eye svg{width:20px;height:20px}
-.login .btn{width:100%;padding:13px;font-size:15px}
-.login .msg{margin-top:12px;font-size:13px;min-height:18px}
-.note{margin-top:14px;font-size:12px;color:var(--dim)}
-.toast{position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--card);border:1.5px solid var(--vio);padding:11px 20px;border-radius:14px;z-index:60;display:none;max-width:90vw;font-weight:600;box-shadow:0 0 26px rgba(155,107,255,.5)}
-
+@media (max-width:1100px){
+  .hero{grid-template-columns:1fr}.hero-l{border-right:0;border-bottom:1px solid var(--line)}
+  .figs{grid-template-columns:1fr 1fr}
+}
 @media (max-width:980px){
   .app{grid-template-columns:1fr}
-  .rail{position:static;height:auto;flex-direction:row;align-items:center;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line);padding:12px;gap:8px}
-  .brand,.rail .foot{display:none}
-  .acc-list{flex-direction:row}
-  .acc{width:auto;min-width:176px}
-  .btn-add{white-space:nowrap}
-  .cols{grid-template-columns:1fr}
-  .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
-  #chartwrap{height:240px}
+  .rail{position:static;height:auto;flex-direction:row;align-items:center;padding:12px;gap:10px;border-right:0;border-bottom:1px solid var(--line);overflow-x:auto}
+  .brand,.rail-foot{display:none}
+  .accs{flex-direction:row;overflow:visible;flex:none}
+  .acc{width:auto;min-width:210px}.add{white-space:nowrap;padding:0 16px;flex:none}
+  .main{padding:16px 14px 60px}
+  .decks{grid-template-columns:1fr}.bridge{display:none}.vault{margin-top:18px}
+  .vg{grid-template-columns:1fr}.ticker{grid-template-columns:1fr}
 }
-@media (max-width:600px){.row>.seg{grid-column:1/3;justify-self:stretch;display:flex}.row>.seg button{flex:1;padding:7px 4px}.main{padding-left:12px;padding-right:12px}.hero{padding:16px 14px 10px}.metrics .v{font-size:18px}}
+@media (max-width:560px){
+  .dk-s{grid-template-columns:1fr 1fr}.mini{grid-template-columns:1fr 1fr 1fr}.fig.net b{font-size:32px}
+  .rw{flex-wrap:wrap}.rw .seg{width:100%}.rw .seg button{flex:1}.two{grid-template-columns:1fr}.two .c{grid-column:auto}
+  .login{padding:24px 18px;margin-top:2vh}.dk-h,.dk-s,.dk-a,.dk-c,.dk-f{padding-left:15px;padding-right:15px}.err{margin-left:15px;margin-right:15px}
+}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
-<div id="gate"><div class="box"><div class="dot"></div><h2 id="gt">Đang kiểm tra thiết bị…</h2><p id="gm">Vui lòng chờ.</p></div></div>
 <div id="toast" class="toast" role="status"></div>
-<div class="bg-fx"><i></i><i></i><i></i></div>
-
-<div class="app" id="app" hidden>
+<div class="bgfx" aria-hidden="true"></div>
+<div class="app" id="app">
   <aside class="rail">
-    <div class="brand"><i class="logo">🎲</i><div><b>AUTO CƯỢC</b><span>LC79 · MD5 + Hũ</span></div></div>
-    <div class="acc-list" id="accs"></div>
-    <button class="btn-add" id="addbtn">+ Thêm tài khoản</button>
-    <div class="foot" id="railfoot"></div>
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 44 44" aria-hidden="true"><rect x="2" y="9" width="27" height="27" rx="8" fill="#0f1729" stroke="#4cc9ff" stroke-width="2.2"/><circle cx="10" cy="17" r="2.4" fill="#4cc9ff"/><circle cx="21" cy="28" r="2.4" fill="#4cc9ff"/><circle cx="15.5" cy="22.5" r="2.4" fill="#4cc9ff"/><rect x="15" y="4" width="27" height="27" rx="8" fill="#0f1729" stroke="#ffb020" stroke-width="2.2"/><circle cx="23" cy="12" r="2.4" fill="#ffb020"/><circle cx="34" cy="23" r="2.4" fill="#ffb020"/><circle cx="23" cy="23" r="2.4" fill="#ffb020"/><circle cx="34" cy="12" r="2.4" fill="#ffb020"/></svg>
+      <div><b>Auto cược</b><small>LC79 · MD5 + Hũ</small></div>
+    </div>
+    <nav class="accs" id="accs"></nav>
+    <button class="add" id="addbtn" type="button">+ Thêm tài khoản</button>
+    <div class="rail-foot" id="railfoot"></div>
   </aside>
   <main class="main" id="main"></main>
 </div>
@@ -9185,271 +9311,315 @@ const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;'
 const fmt=n=>Math.round(n||0).toLocaleString('en-US');
 const fmtS=n=>(n>0?'+':'')+fmt(n);
 const BASE='/tool/autocuoc/api/';
-// ── Per-device account tracking: lưu username của máy này vào localStorage ──
+const TK=['lcmd5','lchu'];
+const TBL={lcmd5:{s:'MD5',n:'Bàn MD5',c:'md5',sub:'Luật cược riêng của bàn MD5'},lchu:{s:'Hũ',n:'Bàn Hũ',c:'hu',sub:'Luật cược riêng của bàn Hũ'}};
+const SHARED_KEYS=['target_on','target','target_wd','wd_kind','wd_code','wd_number','wd_name'];
+const STATUS={expired:'Key hết hạn',running:'Đang cược',paused:'Pause · theo dõi ảo',hold:'Tạm dừng',ready:'Sẵn sàng',stopped:'Đã dừng',target:'Đạt mục tiêu lãi',nofund:'Hết số dư',wd_stop:'Dừng sau khi rút',error:'Lỗi',restart:'Cần đăng nhập lại'};
+/* ── mỗi máy chỉ thấy tài khoản đã đăng nhập trên máy đó (localStorage theo HWID) ── */
 const AB_LS_KEY='ab_accs_'+HWID;
 function lsGetAccs(){try{return JSON.parse(localStorage.getItem(AB_LS_KEY)||'[]')}catch(e){return[]}}
 function lsAddAcc(u){const a=lsGetAccs();if(!a.includes(u)){a.push(u);try{localStorage.setItem(AB_LS_KEY,JSON.stringify(a))}catch(e){}}}
 function lsRemAcc(u){const a=lsGetAccs().filter(x=>x!==u);try{localStorage.setItem(AB_LS_KEY,JSON.stringify(a))}catch(e){}}
-// Lọc sessions theo máy: chỉ hiện acc thuộc máy này (hoặc tất cả nếu chưa có data máy)
-function filterMyAccs(sessions){const mine=lsGetAccs();if(!mine.length)return sessions;return sessions.filter(s=>mine.includes(s.username))}
-const STATUS={expired:'Key hết hạn',running:'Đang cược',paused:'Pause · theo dõi ảo',hold:'Tạm dừng',ready:'Sẵn sàng',stopped:'Đã dừng',target:'Đạt mục tiêu lãi',nofund:'Hết số dư',wd_stop:'Dừng sau khi rút',error:'Lỗi',restart:'Cần đăng nhập lại'};
+function filterMyAccs(list){const mine=lsGetAccs();if(!mine.length)return list;return list.filter(s=>mine.includes(s.username))}
 
 async function api(p,body){
   const o={headers:Object.assign({'Content-Type':'application/json','X-User-Key':ABKEY},HWID_HDR)};
   if(body!==undefined){o.method='POST';o.body=JSON.stringify(body)}
   const r=await fetch(BASE+p,o);let j={};try{j=await r.json()}catch(e){}
   if((r.status===401&&!j.sai_tk)||(r.status===403&&(j.sai_game||j.can_key))){ABK_BAD(j.loi);return j}   /* key hết hạn / bị xoá / sai game -> về màn nhập key */
-  if(!r.ok&&!j.loi)j.loi='Lỗi '+r.status; j._st=r.status; return j;
+  if(!r.ok&&!j.loi)j.loi='Lỗi '+r.status;j._st=r.status;return j;
 }
-function toast(m){const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(toast._t);toast._t=setTimeout(()=>t.style.display='none',3200)}
+function toast(m){const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(toast._t);toast._t=setTimeout(()=>t.style.display='none',3400)}
 
-/* ── vào thẳng giao diện (đã qua màn nhập key; mỗi request api() đều kèm key) ── */
-function gate(){$('#app').hidden=false;init()}
-
-/* ── trạng thái ── */
-let WANT='', PREFILL='', S=null, SEL=null, ADDING=false, FORMKEY='', F=null, LOGIN=null, TAB='bets', RANGE=0, MODE='net', saveT=0, saveMsg='';
+/* ── trạng thái giao diện ── */
+let S=null,SEL='',ADDING=false,PREFILL='',FORMKEY='',FM={},SRC='all',MODE='net',RANGE=0,TAB='bets',BUSY=false;
+const ST={};
 async function poll(){
   try{
     const j=await api('state'+(SEL?('?id='+SEL):''));
-    if(j.ok){S=j; if(!SEL&&j.selected)SEL=j.selected.id; render()}
+    if(j.ok){S=j;if(!SEL&&j.selected)SEL=j.selected.id;render()}
   }catch(e){}
   setTimeout(poll,2000);
 }
-function init(){ $('#addbtn').onclick=()=>{ADDING=true;LOGIN=null;PREFILL='';FORMKEY='';render()}; poll(); }
+async function poll_now(){const j=await api('state'+(SEL?('?id='+SEL):''));if(j.ok){S=j;render()}}
+$('#addbtn').onclick=()=>{ADDING=true;PREFILL='';FORMKEY='';render()};
+poll();
 
 function render(){
   if(!S)return;
-  const acc=filterMyAccs(S.sessions);
-  if(!acc.length&&!ADDING)ADDING=true;
-  $('#accs').innerHTML=acc.map(a=>`<button class="acc ${a.id===SEL&&!ADDING?'sel':''}" data-id="${a.id}">
-    <i class="st ${a.status}"></i><span class="nm">${esc(a.nick||a.username)}<em class="tb ${a.table||'lcmd5'}">${esc(a.table_short||'MD5')}</em></span><span class="pl ${a.net>=0?'up':'dn'}">${fmtS(a.net)}</span>
-    <span class="sub">${STATUS[a.status]||a.status} · ${fmt(a.balance)}</span></button>`).join('');
+  const accs=filterMyAccs(S.accounts||[]);
+  if(!accs.length&&!ADDING)ADDING=true;
+  if(!ADDING&&accs.length&&!accs.some(a=>a.id===SEL)){SEL=accs[0].id;FORMKEY='';poll_now();return}
+  $('#accs').innerHTML=accs.map(a=>`<button type="button" class="acc ${a.id===SEL&&!ADDING?'sel':''}" data-id="${a.id}">
+    <span class="av">${esc((a.nick||a.username||'?').trim().charAt(0).toUpperCase())}</span>
+    <span class="ab"><span class="an">${esc(a.nick||a.username)}</span><span class="ap">${TK.map(k=>`<i class="pl ${TBL[k].c} ${a.tables[k]?a.tables[k].status:''}">${TBL[k].s}</i>`).join('')}</span></span>
+    <span class="ax ${a.net>=0?'up':'dn'}">${fmtS(a.net)}</span></button>`).join('');
   document.querySelectorAll('.acc').forEach(b=>b.onclick=()=>{SEL=b.dataset.id;ADDING=false;FORMKEY='';poll_now()});
-  $('#railfoot').innerHTML='<button class="btn-add" id="klo" type="button">Đăng xuất key</button>';$('#klo').onclick=()=>ABK_OUT();
+  $('#railfoot').innerHTML='<button class="add" id="klo" type="button">Đăng xuất key</button>';$('#klo').onclick=()=>ABK_OUT();
   if(ADDING){renderLogin();return}
-  const s=S.selected; if(!s||s.id!==SEL){return}
-  renderSession(s);
+  const a=S.selected;if(!a||a.id!==SEL)return;
+  renderAccount(a);
 }
-async function poll_now(){const j=await api('state?id='+SEL);if(j.ok){S=j;render()}}
 
 /* ── đăng nhập ── */
 const EYE='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
 const EYE_OFF='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.5 10.5 0 0 1 12 19c-6.4 0-10-7-10-7a18.6 18.6 0 0 1 4.06-5.06M9.9 4.24A9.9 9.9 0 0 1 12 5c6.4 0 10 7 10 7a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24"/><path d="M1 1l22 22"/></svg>';
 function renderLogin(){
-  const m=$('#main'); const key='login'+(LOGIN?((LOGIN.id||'')+'|'+(LOGIN.sel||'')):'');
-  if(FORMKEY===key)return; FORMKEY=key;
-  if(!LOGIN){
-    m.innerHTML=`<section class="login"><h2>Thêm tài khoản LC79</h2><p class="lead">Đăng nhập để tool lấy số dư thật và đặt cược theo dự đoán của bàn LC MD5 và LC Hũ — mỗi bàn có cấu hình riêng.</p>
-      <label class="fld"><span>Tên đăng nhập</span><input id="lu" value="${esc(PREFILL)}" autocomplete="username" autocapitalize="none" spellcheck="false"></label>
-      <div class="fld"><span>Mật khẩu</span><div class="pwb"><input id="lp" type="password" autocomplete="current-password"><button type="button" class="eye" id="lpe" aria-label="Hiện mật khẩu" title="Hiện / ẩn mật khẩu">${EYE}</button></div></div>
-      <button class="btn go" id="lgo">Đăng nhập</button><div class="msg dn" id="lmsg"></div>
-      </section>`;
-    const go=async()=>{
-      const u=$('#lu').value.trim(),p=$('#lp').value; if(!u||!p){$('#lmsg').textContent='Nhập đủ tên đăng nhập và mật khẩu';return}
-      $('#lgo').disabled=true;$('#lgo').textContent='Đang đăng nhập…';$('#lmsg').textContent='';
-      const j=await api('login',{username:u,password:p});
-      if(!j.ok){$('#lgo').disabled=false;$('#lgo').textContent='Đăng nhập';$('#lmsg').textContent=j.loi||'Đăng nhập thất bại';const pe=$('#lp');if(pe){pe.focus();pe.select()}return}
-      lsAddAcc(u); LOGIN=j;LOGIN.sel=(WANT&&j.tables&&j.tables[WANT])?WANT:'lcmd5';WANT='';SEL=j.id;FORMKEY='';F=null;render();
-    };
-    $('#lgo').onclick=go; $('#lp').onkeydown=e=>{if(e.key==='Enter')go()};
-    $('#lpe').onclick=()=>{const i=$('#lp'),sh=i.type==='password';i.type=sh?'text':'password';$('#lpe').innerHTML=sh?EYE_OFF:EYE;$('#lpe').setAttribute('aria-label',sh?'Ẩn mật khẩu':'Hiện mật khẩu');i.focus()};
-    setTimeout(()=>{const e=PREFILL?$('#lp'):$('#lu');e&&e.focus()},50);
-    return;
-  }
-  /* đã đăng nhập: chọn BÀN (MD5 / Hũ) — mỗi bàn có cấu hình RIÊNG — rồi bắt đầu */
-  const TB=LOGIN.tables||{}; const keys=['lcmd5','lchu'].filter(k=>TB[k]);
-  if(!LOGIN.sel||!TB[LOGIN.sel])LOGIN.sel=keys[0];
-  const sel=LOGIN.sel, T=TB[sel];
-  LOGIN.fs=LOGIN.fs||{};
-  if(!LOGIN.fs[sel])LOGIN.fs[sel]=Object.assign({},T.cfg||{});
-  F=LOGIN.fs[sel];
-  m.innerHTML=`<section class="login" style="max-width:720px;padding:0;overflow:hidden">
-    <div style="padding:22px 24px;border-bottom:1px solid var(--line)"><h2 style="margin-bottom:2px">${esc(LOGIN.nick)}</h2>
-    <p class="mut">Số dư thật: <b class="gold">${fmt(LOGIN.balance)}</b> — mỗi bàn có <b>cấu hình riêng</b>: chọn bàn, chỉnh luật cược rồi bấm Bắt đầu. Đổi được cả khi đang chạy.</p></div>
-    <div style="padding:14px 24px 0"><div class="seg big" id="tbseg">${keys.map(k=>`<button data-t="${k}" class="${k===sel?'on':''}">${esc(TB[k].label)}${TB[k].alive?' · đang chạy':''}</button>`).join('')}</div></div>
-    <div id="cfgbox"></div>
-    <div style="padding:18px 24px;display:flex;gap:10px;flex-wrap:wrap;border-top:1px solid var(--line)">
-      <button class="btn go" id="sgo" style="width:auto;flex:1" ${T.alive?'disabled':''}>Bắt đầu auto cược bàn ${esc(T.label)}</button>
-      ${T.co_lich_su&&!T.alive?'<button class="btn" id="scont" style="width:auto">Tiếp tục lịch sử cũ</button>':''}
-    </div><div class="msg dn" id="smsg" style="padding:0 24px 16px">${T.alive?'Bàn này đang chạy — chọn nó ở danh sách bên trái để chỉnh cấu hình.':''}</div></section>`;
-  buildCfg($('#cfgbox'),false);
-  $('#tbseg').querySelectorAll('button').forEach(b=>b.onclick=()=>{LOGIN.sel=b.dataset.t;FORMKEY='';render()});
-  const start=async reset=>{
-    $('#smsg').textContent='';
-    const j=await api('start',{id:T.id,cfg:F,reset});
-    if(!j.ok){$('#smsg').textContent=j.loi||'Không bắt đầu được';return}
-    SEL=T.id;ADDING=false;LOGIN=null;FORMKEY='';await poll_now();
+  const key='login|'+PREFILL;if(FORMKEY===key)return;FORMKEY=key;
+  $('#main').innerHTML=`<section class="login"><h2>Thêm tài khoản LC79</h2>
+    <p class="lead">Đăng nhập một lần. Tài khoản mở thành một tab, chứa cả bàn MD5 và bàn Hũ.</p>
+    <div class="two"><div class="a"><b>Bàn MD5</b>Luật cược riêng</div><div class="b"><b>Bàn Hũ</b>Luật cược riêng</div><div class="c"><b>Mục tiêu lãi và rút tiền</b>Dùng chung cho cả 2 bàn</div></div>
+    <label class="fld"><span>Tên đăng nhập</span><input id="lu" value="${esc(PREFILL)}" autocomplete="username" autocapitalize="none" spellcheck="false"></label>
+    <div class="fld"><span>Mật khẩu</span><div class="pwb"><input id="lp" type="password" autocomplete="current-password"><button type="button" class="eye" id="lpe" aria-label="Hiện mật khẩu">${EYE}</button></div></div>
+    <button class="btn go" id="lgo" type="button">Đăng nhập</button><div class="msg" id="lmsg"></div></section>`;
+  const go=async()=>{
+    const u=$('#lu').value.trim(),p=$('#lp').value;if(!u||!p){$('#lmsg').textContent='Nhập đủ tên đăng nhập và mật khẩu';return}
+    $('#lgo').disabled=true;$('#lgo').textContent='Đang đăng nhập…';$('#lmsg').textContent='';
+    const j=await api('login',{username:u,password:p});
+    if(!j.ok){$('#lgo').disabled=false;$('#lgo').textContent='Đăng nhập';$('#lmsg').textContent=j.loi||'Đăng nhập thất bại';const pe=$('#lp');if(pe){pe.focus();pe.select()}return}
+    lsAddAcc(u);ADDING=false;SEL=j.id;FORMKEY='';PREFILL='';await poll_now();toast('Đã đăng nhập '+(j.nick||u)+' · số dư '+fmt(j.balance));
   };
-  $('#sgo').onclick=()=>start(true);
-  if($('#scont'))$('#scont').onclick=()=>start(false);
+  $('#lgo').onclick=go;$('#lp').onkeydown=e=>{if(e.key==='Enter')go()};
+  $('#lpe').onclick=()=>{const i=$('#lp'),sh=i.type==='password';i.type=sh?'text':'password';$('#lpe').innerHTML=sh?EYE_OFF:EYE;$('#lpe').setAttribute('aria-label',sh?'Ẩn mật khẩu':'Hiện mật khẩu');i.focus()};
+  setTimeout(()=>{const e=PREFILL?$('#lp'):$('#lu');e&&e.focus()},50);
 }
 
-/* ── bảng cấu hình (dùng cho cả lúc bắt đầu và lúc đang chạy) ── */
-function buildCfg(box,live){
-  const c=F, lim=S.wd_limits;
-  const segBtn=(k,v,t)=>`<button data-k="${k}" data-v="${v}" class="${c[k]===v?'on':''}">${t}</button>`;
-  box.innerHTML=`
-  <div class="row"><div><div class="t">Cược gốc mỗi ván</div><div class="d">Mức cược khi không có luật nào đang áp dụng</div></div><input class="num" id="f_bet" inputmode="numeric" value="${c.bet}"></div>
-  <div class="row"><div><div class="t">Khi thua</div><div class="d">Giữ nguyên · về gốc · nhân đôi (Martingale)</div></div>
-    <div class="seg">${segBtn('loss_mode','keep','Giữ nguyên')}${segBtn('loss_mode','reset','Về gốc')}${segBtn('loss_mode','x2','Nhân đôi')}</div></div>
-  <div class="row"><div><div class="t">x2 sau chuỗi thua</div><div class="d">Thua đủ N ván liên tiếp thì nhân đôi một lần; thắng lại về cược gốc</div></div>
-    <label class="sw"><input type="checkbox" id="f_loss_x2_on" ${c.loss_x2_on?'checked':''}><span></span></label>
-    <div class="sub" id="s_loss_x2" ${c.loss_x2_on?'':'hidden'}>Sau <input class="num" style="width:64px" id="f_loss_x2_streak" inputmode="numeric" value="${c.loss_x2_streak}"> ván thua liên tiếp</div></div>
-  <div class="row"><div><div class="t">Khi thắng</div><div class="d">Giữ nguyên · về gốc · nhân đôi sau chuỗi thắng</div></div>
-    <div class="seg">${segBtn('win_mode','keep','Giữ nguyên')}${segBtn('win_mode','reset','Về gốc')}${segBtn('win_mode','x2','Nhân đôi')}</div>
-    <div class="sub" id="s_win_x2" ${c.win_mode==='x2'?'':'hidden'}>Nhân đôi sau <input class="num" style="width:64px" id="f_win_x2_streak" inputmode="numeric" value="${c.win_x2_streak}"> ván thắng liên tiếp
-      <label class="ck"><input type="checkbox" id="f_win_x2_keep" ${c.win_x2_keep?'checked':''}> giữ x2 tới khi thua</label></div></div>
-  <div class="row"><div><div class="t">Giảm cược khi thua liên tiếp</div><div class="d">Thua đủ N ván thì hạ xuống mức thấp hơn, thắng lại về gốc</div></div>
-    <label class="sw"><input type="checkbox" id="f_reduce_on" ${c.reduce_on?'checked':''}><span></span></label>
-    <div class="sub" id="s_reduce" ${c.reduce_on?'':'hidden'}>Sau <input class="num" style="width:64px" id="f_reduce_streak" inputmode="numeric" value="${c.reduce_streak}"> ván thua → cược <input class="num" id="f_reduce_bet" inputmode="numeric" value="${c.reduce_bet||''}" placeholder="mức giảm"></div></div>
-  <div class="row"><div><div class="t">Pause khi thua dài</div><div class="d">Ngừng cược nhưng vẫn theo dõi ảo, đủ chuỗi thắng thì cược lại</div></div>
-    <label class="sw"><input type="checkbox" id="f_pause_on" ${c.pause_on?'checked':''}><span></span></label>
-    <div class="sub" id="s_pause" ${c.pause_on?'':'hidden'}>Pause sau <input class="num" style="width:64px" id="f_pause_streak" inputmode="numeric" value="${c.pause_streak}"> ván thua · cược lại khi thắng <input class="num" style="width:64px" id="f_resume_wins" inputmode="numeric" value="${c.resume_wins}"> ván liên tiếp</div></div>
-  <div class="goal ${c.target_on?'open':''}" id="goalcard">
-    <div class="goal-h"><div class="goal-ic">🎯</div>
-      <div class="goal-t"><div class="t">Dừng khi đạt lãi</div><div class="d">Lãi chạm mục tiêu → dừng toàn bộ cược</div></div>
-      <label class="sw"><input type="checkbox" id="f_target_on" ${c.target_on?'checked':''}><span></span></label></div>
-    <div class="goal-b" id="s_target" ${c.target_on?'':'hidden'}>
-      <div class="gl">Mục tiêu lãi</div>
-      <div class="money"><input id="f_target" inputmode="numeric" value="${c.target||''}" placeholder="vd 200000"><em>VNĐ</em></div>
-      <div class="chips">${[100000,200000,500000,1000000].map(v=>`<button type="button" class="chip-q" data-v="${v}">+${v>=1e6?(v/1e6)+'tr':(v/1e3)+'k'}</button>`).join('')}</div>
-      <div class="goal-sep"></div>
-      <div class="goal-h sm"><div class="goal-t"><div class="t">Tự động rút khi đạt lãi</div><div class="d">Dừng cược xong gửi lệnh rút đúng bằng mức mục tiêu</div></div>
-        <label class="sw"><input type="checkbox" id="f_target_wd" ${c.target_wd?'checked':''}><span></span></label></div>
-      <div class="wd-box" id="s_wd" ${c.target_wd?'':'hidden'}>
-        <div class="gl">Rút về</div>
-        <div class="seg big">${segBtn('wd_kind','momo','📱 Momo')}${segBtn('wd_kind','bank','🏦 Ngân hàng')}</div>
-        <button type="button" class="mini pull" id="wd_pull">⬇ Lấy tài khoản đã liên kết từ LC79</button>
+/* ── ô cấu hình ── */
+const sw=(k,on)=>`<label class="sw"><input type="checkbox" data-k="${k}" ${on?'checked':''}><span></span></label>`;
+const seg=(k,list,val,cls)=>`<div class="seg ${cls||''}" data-k="${k}">${list.map(x=>`<button type="button" data-v="${x[0]}" class="${val===x[0]?'on':''}">${x[1]}</button>`).join('')}</div>`;
+const ni=(k,v,w,ph)=>`<input class="ni" data-k="${k}" inputmode="numeric" value="${esc(v==null?'':v)}" ${ph?`placeholder="${ph}"`:''} ${w?`style="width:${w}px"`:''}>`;
+const rt=(t,d)=>`<div class="rt"><b>${t}</b><small>${d}</small></div>`;
+function deckCfg(c){
+  return `<div class="betbox"><div class="rt"><b>Cược gốc mỗi ván</b><small>Mức cược khi chưa có luật nào kích hoạt</small></div>
+    <div class="money"><input data-k="bet" inputmode="numeric" value="${esc(c.bet)}" aria-label="Cược gốc"><em>đ</em></div>
+    <div class="qk">${[1000,5000,10000,50000,100000].map(v=>`<button type="button" data-set="bet" data-val="${v}">${v>=1000?(v/1000)+'k':v}</button>`).join('')}</div></div>
+  <div class="rw">${rt('Khi thua','Giữ mức, về gốc hoặc nhân đôi')}${seg('loss_mode',[['keep','Giữ'],['reset','Về gốc'],['x2','Nhân đôi']],c.loss_mode)}</div>
+  <div class="rw">${rt('Khi thắng','Giữ mức, về gốc hoặc nhân đôi')}${seg('win_mode',[['keep','Giữ'],['reset','Về gốc'],['x2','Nhân đôi']],c.win_mode)}</div>
+  <div class="sub" data-show="win_mode=x2">Nhân đôi sau ${ni('win_x2_streak',c.win_x2_streak,60)} ván thắng liên tiếp <label class="ck"><input type="checkbox" data-k="win_x2_keep" ${c.win_x2_keep?'checked':''}> giữ x2 tới khi thua</label></div>
+  <div class="rw">${rt('x2 sau chuỗi thua','Nhân đôi một lần, thắng lại về gốc')}${sw('loss_x2_on',c.loss_x2_on)}</div>
+  <div class="sub" data-show="loss_x2_on">Sau ${ni('loss_x2_streak',c.loss_x2_streak,60)} ván thua liên tiếp</div>
+  <div class="rw">${rt('Giảm cược khi thua dài','Hạ xuống mức thấp hơn, thắng lại về gốc')}${sw('reduce_on',c.reduce_on)}</div>
+  <div class="sub" data-show="reduce_on">Sau ${ni('reduce_streak',c.reduce_streak,60)} ván thua, cược ${ni('reduce_bet',c.reduce_bet||'',100,'mức giảm')}</div>
+  <div class="rw">${rt('Pause khi thua dài','Ngừng cược nhưng vẫn theo dõi ảo')}${sw('pause_on',c.pause_on)}</div>
+  <div class="sub" data-show="pause_on">Pause sau ${ni('pause_streak',c.pause_streak,60)} ván thua, cược lại khi thắng ${ni('resume_wins',c.resume_wins,60)} ván liên tiếp</div>`;
+}
+function vaultCfg(c){
+  return `<div class="vg"><div>
+      <div class="rw" style="border-top:0">${rt('Dừng khi tổng lãi đạt mục tiêu','Cộng lãi/lỗ của MD5 và Hũ, chạm mục tiêu thì dừng cả 2 bàn')}${sw('target_on',c.target_on)}</div>
+      <div data-show="target_on"><div class="gl">Mục tiêu lãi</div>
+        <div class="money"><input data-k="target" inputmode="numeric" value="${esc(c.target||'')}" placeholder="vd 200000" aria-label="Mục tiêu lãi"><em>đ</em></div>
+        <div class="qk">${[100000,200000,500000,1000000].map(v=>`<button type="button" data-add="target" data-val="${v}">+${v>=1e6?(v/1e6)+'tr':(v/1e3)+'k'}</button>`).join('')}<button type="button" data-set="target" data-val="">Xoá</button></div></div>
+    </div><div>
+      <div class="rw" data-show="target_on" style="border-top:0">${rt('Tự rút khi đạt mục tiêu','Gửi lệnh rút đúng bằng mức mục tiêu')}${sw('target_wd',c.target_wd)}</div>
+      <div data-show="target_on,target_wd"><div class="gl">Rút về</div>
+        ${seg('wd_kind',[['momo','Momo'],['bank','Ngân hàng']],c.wd_kind,'kind')}
+        <button type="button" class="btn sm ghost pull" id="wd_pull">Lấy tài khoản đã liên kết từ LC79</button>
         <div id="wd_list" class="wlist"></div>
-        <input class="fi" id="f_wd_number" placeholder="${c.wd_kind==='bank'?'Số tài khoản':'SĐT Momo'}" value="${esc(c.wd_number)}" inputmode="numeric">
-        <input class="fi" id="f_wd_name" placeholder="Tên chủ tài khoản (tuỳ chọn)" value="${esc(c.wd_name)}">
-        <div class="wd-sum" id="wd_sum"></div>
-        <div class="hint">Tool gửi đúng số tiền bằng mục tiêu lãi, không làm tròn hay chia nhỏ — hạn mức do LC79 quyết định.</div>
-      </div>
-    </div>
-  </div>`;
-  const dirty=()=>{ if(live)scheduleSave() };
-  const sum=()=>{const e=$('#wd_sum');if(!e)return;
-    const to=F.wd_number?((F.wd_kind==='bank'?(F.wd_code&&F.wd_code!=='MOMO'?F.wd_code.toUpperCase()+' ':'Ngân hàng '):'Momo ')+esc(F.wd_number)):'<i>chưa chọn nơi nhận</i>';
-    e.innerHTML='Khi lãi ≥ <b>'+(+F.target?fmt(+F.target):'…')+'</b> → dừng cược, gửi lệnh rút <b>'+(+F.target?fmt(+F.target):'…')+'</b> về <b>'+to+'</b>'};
-  const num=(id,k)=>{const e=$('#'+id);if(e)e.oninput=()=>{F[k]=e.value.trim();sum();dirty()}};
-  [['f_bet','bet'],['f_loss_x2_streak','loss_x2_streak'],['f_win_x2_streak','win_x2_streak'],['f_reduce_streak','reduce_streak'],['f_reduce_bet','reduce_bet'],
-   ['f_pause_streak','pause_streak'],['f_resume_wins','resume_wins'],['f_target','target'],['f_wd_number','wd_number'],['f_wd_name','wd_name']].forEach(a=>num(a[0],a[1]));
-  const tg=(id,k,sub,after)=>{const e=$('#'+id);if(e)e.onchange=()=>{F[k]=e.checked;if(sub)$('#'+sub).hidden=!e.checked;if(after)after(e.checked);sum();dirty()}};
-  tg('f_loss_x2_on','loss_x2_on','s_loss_x2');tg('f_reduce_on','reduce_on','s_reduce');tg('f_pause_on','pause_on','s_pause');
-  tg('f_target_on','target_on','s_target',on=>$('#goalcard').classList.toggle('open',on));tg('f_target_wd','target_wd','s_wd');tg('f_win_x2_keep','win_x2_keep');
-  box.querySelectorAll('.chip-q').forEach(b=>b.onclick=()=>{const e=$('#f_target');F.target=String((+F.target||0)+(+b.dataset.v));e.value=F.target;sum();dirty()});
-  box.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>{
-    const k=b.dataset.k;F[k]=b.dataset.v;
-    b.parentNode.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
-    if(k==='win_mode')$('#s_win_x2').hidden=F[k]!=='x2';
-    if(k==='wd_kind'){$('#f_wd_number').placeholder=F[k]==='bank'?'Số tài khoản':'SĐT Momo';$('#wd_list').innerHTML='';if(F[k]==='momo')F.wd_code='MOMO';sum()}
-    dirty();
-  });
-  $('#wd_pull').onclick=async()=>{
-    const id=live?SEL:(LOGIN&&LOGIN.tables&&LOGIN.tables[LOGIN.sel]?LOGIN.tables[LOGIN.sel].id:(LOGIN&&LOGIN.id)); const l=$('#wd_list'); l.innerHTML='<span class="mut">Đang lấy…</span>';
-    const j=await api('wallets',{id,kind:F.wd_kind});
-    if(!j.ok||!j.wallets.length){l.innerHTML='<span class="mut">LC79 chưa liên kết '+(F.wd_kind==='bank'?'tài khoản ngân hàng':'ví Momo')+' nào — nhập tay bên dưới.</span>';return}
-    l.innerHTML=j.wallets.map((w,i)=>`<button type="button" class="wcard ${w.number===F.wd_number?'on':''}" data-i="${i}"><b>${esc((w.code||F.wd_kind).toUpperCase())} · ${esc(w.number)}</b><small>${esc(w.name||'')}</small></button>`).join('');
-    l.querySelectorAll('button').forEach(b=>b.onclick=()=>{const w=j.wallets[+b.dataset.i];
-      F.wd_number=w.number;F.wd_name=w.name;if(F.wd_kind==='bank')F.wd_code=w.code;
-      $('#f_wd_number').value=w.number;$('#f_wd_name').value=w.name;
-      l.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));sum();dirty()});
-  };
-  sum();
+        <input class="fi" data-k="wd_number" id="f_wd_number" placeholder="${c.wd_kind==='bank'?'Số tài khoản':'SĐT Momo'}" value="${esc(c.wd_number)}" inputmode="numeric">
+        <input class="fi" data-k="wd_name" placeholder="Tên chủ tài khoản (tuỳ chọn)" value="${esc(c.wd_name)}">
+        <div class="hint">Tool gửi đúng số tiền bằng mục tiêu, không làm tròn hay chia nhỏ. Hạn mức do LC79 quyết định.</div></div>
+    </div></div>
+    <div style="padding:0 22px 6px"><div class="wsum" id="wd_sum"></div></div>`;
 }
-function scheduleSave(){
-  clearTimeout(saveT);saveMsg='Đang lưu…';paintSaved();
-  saveT=setTimeout(async()=>{
-    const j=await api('config',{id:SEL,cfg:F});
-    const e=$('#cfgerr');
-    if(j.ok){saveMsg='Đã lưu';if(e){e.textContent='';e.style.display='none'}}
-    else{saveMsg='Chưa lưu';if(e){e.textContent=j.loi||'Cấu hình chưa hợp lệ';e.style.display='block'}}
-    paintSaved();
-  },600);
-}
-function paintSaved(){const e=$('#saved');if(e)e.textContent=saveMsg}
 
-/* ── màn hình 1 tài khoản ── */
+/* ── gắn sự kiện chung cho 1 khối cấu hình (scope = lcmd5 | lchu | shared) ── */
+function showRules(box,scope){
+  box.querySelectorAll('[data-show]').forEach(e=>{
+    const F=FM[scope];
+    e.hidden=!e.dataset.show.split(",").every(r=>{const p=r.split('=');return p.length>1?F[p[0]]===p[1]:!!F[p[0]]});
+  });
+}
+function bindBox(box,scope){
+  const F=()=>FM[scope];
+  box.oninput=e=>{const t=e.target;if(t.dataset&&t.dataset.k&&t.type!=='checkbox'){F()[t.dataset.k]=t.value.trim();dirty(scope)}};
+  box.onchange=e=>{const t=e.target;if(t.type==='checkbox'&&t.dataset.k){F()[t.dataset.k]=t.checked;showRules(box,scope);dirty(scope)}};
+  box.onclick=e=>{
+    const sb=e.target.closest('.seg button');
+    if(sb&&box.contains(sb)){const sg=sb.parentNode,k=sg.dataset.k;F()[k]=sb.dataset.v;sg.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===sb));
+      if(k==='wd_kind'){const n=$('#f_wd_number');if(n)n.placeholder=F()[k]==='bank'?'Số tài khoản':'SĐT Momo';if(F()[k]==='momo')F().wd_code='MOMO';const l=$('#wd_list');if(l)l.innerHTML=''}
+      showRules(box,scope);dirty(scope);return}
+    const st=e.target.closest('[data-set]');
+    if(st&&box.contains(st)){const k=st.dataset.set;F()[k]=st.dataset.val;const i=box.querySelector('input[data-k="'+k+'"]');if(i)i.value=st.dataset.val;dirty(scope);return}
+    const ad=e.target.closest('[data-add]');
+    if(ad&&box.contains(ad)){const k=ad.dataset.add;F()[k]=String((+F()[k]||0)+(+ad.dataset.val));const i=box.querySelector('input[data-k="'+k+'"]');if(i)i.value=F()[k];dirty(scope);return}
+    if(e.target.closest('#wd_pull'))pullWallets();
+  };
+  showRules(box,scope);
+}
+async function pullWallets(){
+  const a=S&&S.selected;if(!a)return;const F=FM.shared,l=$('#wd_list');l.innerHTML='<span class="mut">Đang lấy…</span>';
+  const j=await api('wallets',{id:a.tables.lcmd5.id,kind:F.wd_kind});
+  if(!j.ok||!(j.wallets||[]).length){l.innerHTML='<span class="mut">LC79 chưa liên kết '+(F.wd_kind==='bank'?'tài khoản ngân hàng':'ví Momo')+' nào. Nhập tay bên dưới.</span>';return}
+  l.innerHTML=j.wallets.map((w,i)=>`<button type="button" class="wcard ${w.number===F.wd_number?'on':''}" data-i="${i}"><b>${esc((w.code||F.wd_kind).toUpperCase())} · ${esc(w.number)}</b><small>${esc(w.name||'')}</small></button>`).join('');
+  l.querySelectorAll('button').forEach(b=>b.onclick=()=>{const w=j.wallets[+b.dataset.i];
+    F.wd_number=w.number;F.wd_name=w.name;if(F.wd_kind==='bank')F.wd_code=w.code;
+    $('#cfg_shared').querySelector('input[data-k="wd_number"]').value=w.number;$('#cfg_shared').querySelector('input[data-k="wd_name"]').value=w.name||'';
+    l.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));dirty('shared')});
+}
+function setSv(scope,t,cls){const e=$('#sv_'+scope);if(e){e.textContent=t;e.className='sv '+(cls||'')}}
+function dirty(scope){
+  if(scope==='shared')sumVault();
+  clearTimeout(ST[scope]);setSv(scope,'Đang lưu…');
+  ST[scope]=setTimeout(()=>saveScope(scope),600);
+}
+async function saveScope(scope){
+  const a=S&&S.selected;if(!a)return;
+  const id=scope==='shared'?a.tables.lcmd5.id:a.tables[scope].id;
+  const j=await api('config',{id,cfg:FM[scope]});const e=$('#err_'+scope);
+  if(j.ok){setSv(scope,'Đã lưu','ok');if(e){e.textContent='';e.hidden=true}}
+  else{setSv(scope,'Chưa lưu','bad');if(e){e.textContent=j.loi||'Cấu hình chưa hợp lệ';e.hidden=false}}
+}
+function sumVault(){
+  const e=$('#wd_sum');if(!e)return;const F=FM.shared,t=+F.target?fmt(+F.target):'…';
+  if(!F.target_on){e.innerHTML='Mục tiêu lãi đang tắt. Hai bàn chạy cho tới khi bạn dừng hoặc hết số dư.';return}
+  if(!F.target_wd){e.innerHTML='Khi tổng lãi MD5 + Hũ ≥ <b>'+t+'</b> → dừng cả 2 bàn.';return}
+  const to=F.wd_number?((F.wd_kind==='bank'?(F.wd_code&&F.wd_code!=='MOMO'?F.wd_code.toUpperCase()+' ':'Ngân hàng '):'Momo ')+esc(F.wd_number)):'<i>chưa chọn nơi nhận</i>';
+  e.innerHTML='Khi tổng lãi MD5 + Hũ ≥ <b>'+t+'</b> → dừng cả 2 bàn, gửi lệnh rút <b>'+t+'</b> về <b>'+to+'</b>.';
+}
+
+/* ── màn hình 1 tài khoản (1 tab = cả 2 bàn) ── */
 function dice(a){return a?`<span class="dice">${a.map(x=>`<i>${x}</i>`).join('')}</span>`:''}
-function sidePill(d){return d==='TÀI'||d==='TAI'?'<span class="pill t">TÀI</span>':d==='XỈU'||d==='XIU'?'<span class="pill x">XỈU</span>':'<span class="pill n">—</span>'}
-function renderSession(s){
-  const m=$('#main'); const key=s.id+'|'+(s.alive?1:0);
-  if(FORMKEY!==key){
-    FORMKEY=key; F=Object.assign({},s.cfg); saveMsg='';
-    m.innerHTML=`
-    <div class="feed" id="feed"></div>
+function sidePill(d){return d==='TÀI'||d==='TAI'?'<span class="sd t">TÀI</span>':d==='XỈU'||d==='XIU'?'<span class="sd x">XỈU</span>':'<span class="sd n">—</span>'}
+function deckHTML(tk){
+  const t=TBL[tk];
+  return `<section class="deck ${t.c}" id="deck_${tk}">
+    <header class="dk-h"><div class="dk-t"><i>${t.s}</i><div><h3>${t.n}</h3><small>${t.sub}</small></div></div><span class="chip" id="dc_${tk}"></span></header>
+    <div class="dk-s" id="ds_${tk}"></div>
+    <div class="dk-a" id="da_${tk}"></div>
+    <div class="dk-c" id="cfg_${tk}"></div>
+    <div class="err" id="err_${tk}" hidden></div>
+    <div class="dk-f"><span class="sv" id="sv_${tk}"></span></div></section>`;
+}
+function renderAccount(a){
+  const m=$('#main');
+  if(FORMKEY!==a.id){
+    FORMKEY=a.id;
+    FM={shared:{}};SHARED_KEYS.forEach(k=>FM.shared[k]=a.shared[k]);
+    TK.forEach(k=>{const c=Object.assign({},a.tables[k].cfg);SHARED_KEYS.concat('wd_on').forEach(x=>delete c[x]);FM[k]=c});
+    m.innerHTML=`<div class="ticker" id="ticker"></div>
     <section class="hero">
-      <div class="hero-top"><div><div class="who"><h1 id="h_nick"></h1><span class="chip" id="h_chip"></span></div>
-        <div class="net" id="h_net"></div></div><div class="actions" id="h_act"></div></div>
-      <div class="chart-bar"><div class="seg" id="modeseg"><button data-m="net" class="on">Lãi / Lỗ</button><button data-m="bal">Số dư</button></div>
-        <div class="seg" id="rangeseg"><button data-r="50">50 ván</button><button data-r="200">200 ván</button><button data-r="0" class="on">Tất cả</button></div></div>
-      <div id="chartwrap"><canvas id="chart"></canvas><div id="tip"></div><div class="empty" id="chartempty" hidden>Chưa có ván nào có kết quả.<br>Biểu đồ chạy ngay khi ván đầu tiên được chấm.</div></div>
+      <div class="hero-l">
+        <div class="idr"><span class="av" id="h_av"></span><div><h1 id="h_nick"></h1><div class="ids"><span class="chip" id="h_chip"></span><span class="mut" id="h_sub"></span></div></div></div>
+        <div class="figs"><div class="fig"><span class="fl">Số dư ví</span><b class="num gold" id="h_bal"></b></div>
+          <div class="fig net"><span class="fl">Lãi / lỗ chung 2 bàn</span><b class="num" id="h_net"></b></div></div>
+        <div class="mini" id="h_mini"></div>
+        <div class="acts" id="h_act"></div>
+      </div>
+      <div class="hero-r">
+        <div class="cbar"><div class="seg src" id="srcseg"><button data-v="all">Tổng</button><button data-v="lcmd5">MD5</button><button data-v="lchu">Hũ</button></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap"><div class="seg" id="modeseg"><button data-v="net">Lãi / Lỗ</button><button data-v="bal">Số dư</button></div>
+          <div class="seg" id="rangeseg"><button data-v="50">50 ván</button><button data-v="200">200 ván</button><button data-v="0">Tất cả</button></div></div></div>
+        <div id="chartwrap"><canvas id="chart"></canvas><div id="tip"></div><div class="empty" id="chartempty" hidden>Chưa có ván nào có kết quả.<br>Biểu đồ vẽ ngay khi ván đầu tiên được chấm.</div></div>
+      </div>
     </section>
-    <div class="metrics" id="metrics"></div>
-    <div class="cols">
-      <section class="panel"><h3>Tính năng · bàn ${esc(s.table_label||'LC MD5')} <span class="saved" id="saved"></span></h3><div id="cfgbox"></div><div class="err" id="cfgerr" style="display:none"></div></section>
-      <section class="panel"><div class="tabs"><button data-t="bets" class="on">Ván cược</button><button data-t="logs">Nhật ký</button></div><div class="list" id="list"></div></section>
-    </div>`;
-    buildCfg($('#cfgbox'),true);
-    $('#modeseg').querySelectorAll('button').forEach(b=>b.onclick=()=>{MODE=b.dataset.m;$('#modeseg').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));drawChart()});
-    $('#rangeseg').querySelectorAll('button').forEach(b=>b.onclick=()=>{RANGE=+b.dataset.r;$('#rangeseg').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));drawChart()});
-    document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{TAB=b.dataset.t;document.querySelectorAll('.tabs button').forEach(x=>x.classList.toggle('on',x===b));paintList()});
-    document.querySelectorAll('.tabs button').forEach(x=>x.classList.toggle('on',x.dataset.t===TAB));
-    $('#modeseg').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x.dataset.m===MODE));
-    $('#rangeseg').querySelectorAll('button').forEach(x=>x.classList.toggle('on',+x.dataset.r===RANGE));
+    <div class="decks">${TK.map(deckHTML).join('')}</div>
+    <div class="bridge"><i class="arm l"></i><i class="arm r"></i><i class="stem"></i><span class="tag">Dùng chung</span></div>
+    <section class="vault" id="vault">
+      <div class="vt"><div><h3>Mục tiêu lãi và rút tiền</h3><small>Một cấu hình cho cả MD5 và Hũ</small></div><span class="vbadge">Dùng chung 2 bàn</span></div>
+      <div class="prog"><div class="pbar"><i id="vp_bar"></i></div><div class="ptx"><span id="vp_l"></span><span id="vp_r"></span></div></div>
+      <div id="cfg_shared"></div>
+      <div class="err" id="err_shared" hidden style="margin-top:6px"></div>
+      <div class="dk-f"><span class="sv" id="sv_shared"></span></div>
+    </section>
+    <section class="act"><div class="act-h"><div class="seg" id="tabseg"><button data-v="bets">Ván cược</button><button data-v="logs">Nhật ký</button></div><span class="mut" id="actn"></span></div><div class="list" id="list"></div></section>`;
+    TK.forEach(k=>{const b=$('#cfg_'+k);b.innerHTML=deckCfg(FM[k]);bindBox(b,k)});
+    const vb=$('#cfg_shared');vb.innerHTML=vaultCfg(FM.shared);bindBox(vb,'shared');sumVault();
+    const mk=(id,get,set)=>{$(id).onclick=e=>{const b=e.target.closest('button');if(!b)return;set(b.dataset.v);paintSegs();drawChart();if(id==='#tabseg')paintList()}};
+    mk('#srcseg',()=>SRC,v=>SRC=v);mk('#modeseg',()=>MODE,v=>MODE=v);mk('#rangeseg',()=>RANGE,v=>RANGE=+v);mk('#tabseg',()=>TAB,v=>TAB=v);
     bindChart();
   }
-  const f=(S.feeds&&S.feeds[s.table])||S.feed;
-  $('#feed').innerHTML=f.ok?`<span><span class="k">${esc(f.ban||'LC MD5')}</span>Phiên ${f.phien?('#'+f.phien):'—'} ${sidePill(f.du_doan)}</span>
-    <span class="mut">Trước: ${f.phien_truoc?('#'+f.phien_truoc):'—'} ${sidePill(f.ket_qua_truoc)} ${dice(f.xuc_xac)}</span>`
-    :`<span class="dn">Nguồn dự đoán đang lỗi: ${esc(f.loi||'chưa có dữ liệu')} — auto cược sẽ không đặt ván mới.</span>`;
-  $('#h_nick').textContent=(s.nick||s.username)+' · '+(s.table_label||'LC MD5');
-  const chip=$('#h_chip');chip.className='chip '+s.status;chip.textContent=STATUS[s.status]||s.status;
-  const n=$('#h_net');n.className='net '+(s.net>=0?'up':'dn');n.innerHTML=fmtS(s.net)+'<small>lãi / lỗ</small>';
-  const act=$('#h_act');
-  let ah='';
-  if(s.alive){ah=(s.hold?'<button class="btn go" data-a="unhold">Tiếp tục cược</button>':'<button class="btn warn" data-a="hold">Tạm dừng</button>')+'<button class="btn stop" data-a="stop">Dừng hẳn</button>'}
-  else{ah='<button class="btn go" data-a="restart">Chạy lại</button><button class="btn" data-a="remove">Xoá</button>'}
-  if(act.dataset.h!==ah){act.dataset.h=ah;act.innerHTML=ah;act.querySelectorAll('button').forEach(b=>b.onclick=()=>doAct(b.dataset.a))}
-  const open=s.open;
-  $('#metrics').innerHTML=`
-   <div class="m1"><div class="l"><b>💰</b>Số dư</div><div class="v gold">${fmt(s.balance)}</div><div class="s">vốn ${fmt(s.start_bal)}</div></div>
-   <div class="m2"><div class="l"><b>🎲</b>Cược ván kế</div><div class="v">${fmt(s.bet)}</div><div class="s">${s.x2_active?'đang x2':s.reduced?'đang giảm':'gốc '+fmt(s.base_bet)}${s.paused?' · pause':''}</div></div>
-   <div class="m3"><div class="l"><b>🏆</b>Thắng / Thua</div><div class="v"><span class="up">${s.w}</span> / <span class="dn">${s.l}</span></div><div class="s">${s.wr==null?'chưa có ván':s.wr+'% thắng'} · chuỗi ${s.win_streak?('thắng '+s.win_streak):s.loss_streak?('thua '+s.loss_streak):'—'}</div></div>
-   <div class="m4"><div class="l"><b>💸</b>Đã rút</div><div class="v">${fmt(s.withdrawn)}</div><div class="s">${s.wd_count} lần · ${s.cfg.wd_on?'auto rút BẬT':'auto rút tắt'}</div></div>`;
-  window.__series=s.series||[];window.__logs=s.logs||[];window.__open=open;
-  drawChart();paintList();paintSaved();
+  paintAccount(a);
 }
-async function doAct(a){
-  if(a==='restart'){const s=S.selected;ADDING=true;FORMKEY='';
-    const tables={};(S.sessions||[]).filter(x=>s&&x.username===s.username).forEach(x=>{tables[x.table||'lcmd5']={id:x.id,label:x.table_label||'LC MD5',cfg:x.cfg,co_lich_su:x.rounds>0,alive:x.alive}});
-    if(s&&s.has_pw&&Object.keys(tables).length){LOGIN={id:s.id,nick:s.nick||s.username,balance:s.balance,tables,sel:s.table||'lcmd5'};PREFILL='';WANT=''}
-    else{LOGIN=null;PREFILL=s?s.username:'';WANT=s?(s.table||'lcmd5'):''}
-    render();return}
-  if(a==='remove'&&!confirm('Xoá tài khoản này khỏi danh sách — xoá cả 2 bàn MD5 + Hũ (mất lịch sử)?'))return;
-  if(a==='stop'&&!confirm('Dừng hẳn auto cược?'))return;
-  const j=await api('action',{id:SEL,act:a});
-  if(!j.ok)toast(j.loi||'Không thực hiện được');
-  if(a==='remove'){SEL=null;FORMKEY=''}
+function paintSegs(){
+  const on=(id,v)=>document.querySelectorAll(id+' button').forEach(b=>b.classList.toggle('on',b.dataset.v===String(v)));
+  on('#srcseg',SRC);on('#modeseg',MODE);on('#rangeseg',RANGE);on('#tabseg',TAB);
+}
+function setHTML(id,h){const e=$(id);if(e&&e.dataset.h!==h){e.dataset.h=h;e.innerHTML=h}return e}
+function paintAccount(a){
+  const T=a.tables;
+  /* bảng giá 2 bàn */
+  setHTML('#ticker',TK.map(k=>{const f=(S.feeds&&S.feeds[k])||{};const c=TBL[k].c;
+    return f.ok?`<div class="tk ${c}"><span class="live">${esc(f.ban||TBL[k].n)}</span><span class="ph">Phiên ${f.phien?('#'+f.phien):'—'}</span>${sidePill(f.du_doan)}<span class="bk">Trước ${f.phien_truoc?('#'+f.phien_truoc):'—'} ${sidePill(f.ket_qua_truoc)} ${dice(f.xuc_xac)}</span></div>`
+    :`<div class="tk ${c}"><span class="live">${esc(f.ban||TBL[k].n)}</span><span class="dn">Nguồn dự đoán lỗi: ${esc(f.loi||'chưa có dữ liệu')}. Bàn này sẽ không đặt ván mới.</span></div>`}).join(''));
+  /* hero */
+  $('#h_av').textContent=(a.nick||a.username||'?').trim().charAt(0).toUpperCase();
+  $('#h_nick').textContent=a.nick||a.username;
+  const ch=$('#h_chip');ch.className='chip '+a.status;ch.textContent=STATUS[a.status]||a.status;
+  $('#h_sub').textContent=a.username;
+  $('#h_bal').textContent=fmt(a.balance);
+  const n=$('#h_net');n.className='num '+(a.net>0?'up':a.net<0?'dn':'');n.innerHTML=fmtS(a.net)+'<small>đ</small>';
+  setHTML('#h_mini',`<div><span>Thắng / Thua</span><b><span class="up">${a.w}</span> / <span class="dn">${a.l}</span></b></div><div><span>Tỉ lệ thắng</span><b>${a.wr==null?'—':a.wr+'%'}</b></div><div><span>Đã rút</span><b>${fmt(a.withdrawn)}</b></div>`);
+  /* nút điều khiển cả tài khoản */
+  const run=TK.filter(k=>T[k].alive),idle=TK.filter(k=>!T[k].alive);
+  const anyHeld=run.some(k=>T[k].hold),anyFree=run.some(k=>!T[k].hold);
+  let ah='';
+  if(idle.length)ah+=`<button class="btn go" data-a="start_all" data-r="1">${run.length?('Chạy bàn '+idle.map(k=>TBL[k].s).join(' + ')):(a.rounds?'Chạy mới cả 2 bàn':'Chạy cả 2 bàn')}</button>`;
+  if(!run.length&&a.rounds)ah+='<button class="btn" data-a="start_all" data-r="0">Chạy tiếp lịch sử</button>';
+  if(anyFree)ah+='<button class="btn warn" data-a="hold_all">Tạm dừng</button>';
+  if(anyHeld)ah+='<button class="btn" data-a="unhold_all">Tiếp tục cược</button>';
+  if(run.length)ah+='<button class="btn stop" data-a="stop_all">Dừng tất cả</button>';
+  if(!run.length)ah+='<button class="btn ghost" data-a="remove">Xoá tài khoản</button>';
+  const act=$('#h_act');if(act.dataset.h!==ah){act.dataset.h=ah;act.innerHTML=ah;act.querySelectorAll('button').forEach(b=>b.onclick=()=>doAct(b.dataset.a,b.dataset.r))}
+  /* 2 bàn */
+  TK.forEach(k=>{
+    const t=T[k],c=$('#dc_'+k);c.className='chip '+t.status;c.textContent=STATUS[t.status]||t.status;
+    const st=t.win_streak?('thắng '+t.win_streak):t.loss_streak?('thua '+t.loss_streak):'—';
+    const note=t.x2_active?'đang x2':t.reduced?'đang giảm':t.paused?'pause':'gốc '+fmt(t.base_bet);
+    setHTML('#ds_'+k,`<div><span>Lãi / lỗ bàn</span><b class="${t.net>0?'up':t.net<0?'dn':''}">${fmtS(t.net)}</b></div><div><span>Thắng / Thua</span><b><span class="up">${t.w}</span> / <span class="dn">${t.l}</span></b></div><div><span>Cược ván kế</span><b title="${note}">${fmt(t.bet)}</b></div><div><span>Chuỗi</span><b>${st}</b></div>`);
+    let h='';
+    if(t.alive){h+=t.hold?`<button class="btn sm go" data-a="unhold" data-t="${k}">Tiếp tục</button>`:`<button class="btn sm warn" data-a="hold" data-t="${k}">Tạm dừng</button>`;h+=`<button class="btn sm stop" data-a="stop" data-t="${k}">Dừng bàn ${TBL[k].s}</button>`}
+    else{h+=`<button class="btn sm go" data-a="start" data-t="${k}" data-r="1">Chạy bàn ${TBL[k].s}</button>`;if(t.rounds)h+=`<button class="btn sm" data-a="start" data-t="${k}" data-r="0">Chạy tiếp</button>`}
+    const da=$('#da_'+k);if(da.dataset.h!==h){da.dataset.h=h;da.innerHTML=h;da.querySelectorAll('button').forEach(b=>b.onclick=()=>doAct(b.dataset.a,b.dataset.r,b.dataset.t))}
+  });
+  /* tiến độ mục tiêu chung */
+  const sh=a.shared||{},tg=+sh.target||0;
+  if(sh.target_on&&tg>0){const p=Math.max(0,Math.min(100,a.net/tg*100));$('#vp_bar').style.width=p+'%';$('#vp_l').textContent='Tổng lãi '+fmtS(a.net)+' / '+fmt(tg);$('#vp_r').textContent=(a.status==='target'?'Đã đạt mục tiêu':Math.round(p)+'% · còn '+fmt(Math.max(0,tg-a.net)))}
+  else{$('#vp_bar').style.width='0%';$('#vp_l').textContent='Chưa đặt mục tiêu lãi';$('#vp_r').textContent=''}
+  window.__a=a;paintSegs();drawChart();paintList();
+}
+async function doAct(act,r,tk){
+  if(BUSY)return;const a=S.selected;if(!a)return;
+  if(act==='remove'&&!confirm('Xoá tài khoản này khỏi danh sách? Xoá cả 2 bàn MD5 + Hũ và mất lịch sử.'))return;
+  if(act==='stop_all'&&!confirm('Dừng hẳn cả 2 bàn?'))return;
+  if(act==='stop'&&!confirm('Dừng hẳn bàn '+TBL[tk].s+'?'))return;
+  BUSY=true;
+  try{
+    if(act==='start'||act==='start_all'){
+      const list=act==='start'?[tk]:TK.filter(k=>!a.tables[k].alive);
+      for(const k of list){
+        const j=await api('start',{id:a.tables[k].id,cfg:Object.assign({},FM[k],FM.shared),reset:r==='1'});
+        if(!j.ok){toast(TBL[k].s+': '+(j.loi||'Không bắt đầu được'));if(j.sai_tk){ADDING=true;PREFILL=a.username;FORMKEY=''}break}
+      }
+    }else{
+      const id=(tk?a.tables[tk]:a.tables.lcmd5).id;
+      const j=await api('action',{id,act});
+      if(!j.ok)toast(j.loi||'Không thực hiện được');
+      if(act==='remove'&&j.ok){lsRemAcc(a.username);SEL='';FORMKEY=''}
+    }
+  }finally{BUSY=false}
   await poll_now();
 }
 function paintList(){
-  const L=$('#list');if(!L)return;
-  const s=window.__series||[],lg=window.__logs||[],o=window.__open;
+  const L=$('#list'),a=window.__a;if(!L||!a)return;
   const tm=t=>new Date(t*1000).toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const tag=k=>`<i class="tg ${TBL[k].c}">${TBL[k].s}</i>`;
+  let h='',n=0;
   if(TAB==='bets'){
-    let h='';
-    if(o)h+=`<div class="bet open"><span class="ph">#${o.phien}</span><span class="dt">${o.virtual?'Theo dõi ảo':'Đang chờ kết quả'} · ${o.side==='TAI'?'Tài':'Xỉu'}</span><span class="am gold">${o.amount?fmt(o.amount):'—'}</span></div>`;
-    h+=s.slice(-60).reverse().map(p=>`<div class="bet ${p.win?'w':'l'}"><span class="ph">#${p.phien}</span><span class="dt">${p.side==='TAI'?'Tài':'Xỉu'} ${fmt(p.amount)} → ${p.res==='TAI'?'Tài':'Xỉu'} ${p.win?'✅':'❌'}</span><span class="am ${p.pnl>=0?'up':'dn'}">${fmtS(p.pnl)}</span></div>`).join('');
+    TK.forEach(k=>{const o=a.tables[k].open;if(o)h+=`<div class="it open">${tag(k)}<span class="ph">#${o.phien}</span><span>${o.virtual?'Theo dõi ảo':'Đang chờ kết quả'} · ${o.side==='TAI'?'Tài':'Xỉu'}</span><span class="am gold">${o.amount?fmt(o.amount):'—'}</span></div>`});
+    const all=[];TK.forEach(k=>(a.tables[k].series||[]).forEach(p=>all.push(Object.assign({tb:k},p))));
+    all.sort((x,y)=>(y.t-x.t)||(y.phien-x.phien));n=all.length;
+    h+=all.slice(0,80).map(p=>`<div class="it">${tag(p.tb)}<span class="ph">#${p.phien}</span><span>${p.side==='TAI'?'Tài':'Xỉu'} ${fmt(p.amount)} → ${p.res==='TAI'?'Tài':'Xỉu'} ${p.win?'✅':'❌'}</span><span class="am ${p.pnl>=0?'up':'dn'}">${fmtS(p.pnl)}</span></div>`).join('');
+    $('#actn').textContent=n?('Tổng '+n+' ván đã chấm'):'';
     L.innerHTML=h||'<div class="nothing">Chưa có ván nào. Ván đầu tiên sẽ hiện ở đây.</div>';
   }else{
-    L.innerHTML=lg.slice().reverse().map(e=>`<div class="log ${e.kind}"><span class="tm">${tm(e.t)}</span><span>${esc(e.msg)}</span></div>`).join('')||'<div class="nothing">Chưa có sự kiện nào.</div>';
+    const all=[];TK.forEach(k=>(a.tables[k].logs||[]).forEach(e=>all.push(Object.assign({tb:k},e))));
+    all.sort((x,y)=>y.t-x.t);$('#actn').textContent='';
+    L.innerHTML=all.slice(0,100).map(e=>`<div class="lg ${e.kind}"><span class="tm">${tm(e.t)}</span>${tag(e.tb)}<span>${esc(e.msg)}</span></div>`).join('')||'<div class="nothing">Chưa có sự kiện nào.</div>';
   }
 }
 
-/* ── biểu đồ lãi / lỗ (canvas, không dùng thư viện) ── */
-let HOVER=-1, PTS=[];
+/* ── biểu đồ (canvas, không dùng thư viện): Tổng = gộp 2 bàn theo thời gian ── */
+let HOVER=-1,PTS=[];
 function bindChart(){
   const cv=$('#chart');
   cv.onmousemove=e=>{const r=cv.getBoundingClientRect();hover(e.clientX-r.left)};
@@ -9457,65 +9627,75 @@ function bindChart(){
   cv.onmouseleave=()=>{HOVER=-1;$('#tip').style.display='none';drawChart()};
   if(window.ResizeObserver)new ResizeObserver(()=>drawChart()).observe($('#chartwrap'));
 }
+function chartData(a){
+  const T=a.tables,mk=k=>(T[k].series||[]).map(p=>Object.assign({tb:k},p));
+  let arr,base,ghost=false;
+  if(SRC==='all'){
+    const all=mk('lcmd5').concat(mk('lchu')).sort((x,y)=>(x.t-y.t)||(x.phien-y.phien));
+    const last={};TK.forEach(k=>{const f=(T[k].series||[])[0];last[k]=f?(f.net-f.pnl):0});
+    arr=all.map((p,i)=>{last[p.tb]=p.net;return Object.assign({},p,{r:i+1,v:MODE==='net'?last.lcmd5+last.lchu:p.bal,g1:last.lcmd5,g2:last.lchu,tot:last.lcmd5+last.lchu})});
+    base=MODE==='net'?0:(a.start_bal||0);ghost=MODE==='net';
+  }else{
+    arr=mk(SRC).map(p=>Object.assign({},p,{v:MODE==='net'?p.net:p.bal,tot:p.net}));
+    base=MODE==='net'?0:(T[SRC].start_bal||0);
+  }
+  arr.unshift({r:0,v:base,g1:0,g2:0,tot:0});
+  if(RANGE>0&&arr.length>RANGE+1)arr=arr.slice(-(RANGE+1));
+  return{pts:arr,base,ghost};
+}
 function hover(x){
-  if(!PTS.length)return; let best=0,bd=1e9;
+  if(!PTS.length)return;let best=0,bd=1e9;
   PTS.forEach((p,i)=>{const d=Math.abs(p.x-x);if(d<bd){bd=d;best=i}});
   HOVER=best;drawChart();
-  const p=PTS[best],t=$('#tip');
-  if(p.d.r===0){t.style.display='none';return}
-  t.innerHTML=`<b>Ván ${p.d.r} · #${p.d.phien}</b>${p.d.side==='TAI'?'Tài':'Xỉu'} ${fmt(p.d.amount)} → ${p.d.res==='TAI'?'Tài':'Xỉu'} ${p.d.win?'✅':'❌'}<br>Ván này <span class="${p.d.pnl>=0?'up':'dn'}">${fmtS(p.d.pnl)}</span><br>Lãi/lỗ <span class="${p.d.net>=0?'up':'dn'}">${fmtS(p.d.net)}</span> · Dư ${fmt(p.d.bal)}`;
-  t.style.display='block';const w=$('#chartwrap').clientWidth;t.style.left=Math.min(Math.max(p.x-75,4),w-160)+'px';t.style.top='6px';
+  const p=PTS[best],t=$('#tip');if(!p.d.phien){t.style.display='none';return}
+  const q=p.d;
+  t.innerHTML=`<b>${q.tb?TBL[q.tb].s+' · ':''}#${q.phien}</b>${q.side==='TAI'?'Tài':'Xỉu'} ${fmt(q.amount)} → ${q.res==='TAI'?'Tài':'Xỉu'} ${q.win?'✅':'❌'}<br>Ván này <span class="${q.pnl>=0?'up':'dn'}">${fmtS(q.pnl)}</span><br>Lãi/lỗ <span class="${q.tot>=0?'up':'dn'}">${fmtS(q.tot)}</span> · Dư ${fmt(q.bal)}`;
+  t.style.display='block';const w=$('#chartwrap').clientWidth;t.style.left=Math.min(Math.max(p.x-80,4),w-190)+'px';t.style.top='6px';
 }
 function drawChart(){
-  const cv=$('#chart');if(!cv)return;const wrap=$('#chartwrap');
-  const W=wrap.clientWidth,H=wrap.clientHeight,dpr=window.devicePixelRatio||1;
+  const cv=$('#chart'),a=window.__a;if(!cv||!a)return;const wrap=$('#chartwrap');
+  const W=wrap.clientWidth,H=wrap.clientHeight,dpr=window.devicePixelRatio||1;if(!W||!H)return;
   cv.width=W*dpr;cv.height=H*dpr;const g=cv.getContext('2d');g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,W,H);
-  let ser=(window.__series||[]).slice();
-  const emp=$('#chartempty');if(emp)emp.hidden=ser.length>0;
-  const s=S&&S.selected; if(!s){return}
-  const base=MODE==='net'?0:s.start_bal;
-  let pts=[{r:0,v:base}].concat(ser.map(p=>Object.assign({v:MODE==='net'?p.net:p.bal},p)));
-  if(RANGE>0&&pts.length>RANGE+1)pts=pts.slice(-(RANGE+1));
+  const D=chartData(a),pts=D.pts,base=D.base;
+  $('#chartempty').hidden=pts.length>1;
   const vals=pts.map(p=>p.v).concat([base]);
-  let lo=Math.min.apply(null,vals),hi=Math.max.apply(null,vals); if(lo===hi){lo-=1;hi+=1}
-  const pad=(hi-lo)*.1;lo-=pad;hi+=pad;
+  if(D.ghost)pts.forEach(p=>{vals.push(p.g1,p.g2)});
+  let lo=Math.min.apply(null,vals),hi=Math.max.apply(null,vals);if(lo===hi){lo-=1;hi+=1}
+  const pad=(hi-lo)*.12;lo-=pad;hi+=pad;
   const step=niceStep((hi-lo)/4);lo=Math.floor(lo/step)*step;hi=Math.ceil(hi/step)*step;
-  const L=8,R=64,T=14,B=22,cw=W-L-R,ch=H-T-B;
-  const X=i=>L+(pts.length<2?cw/2:i*cw/(pts.length-1)), Y=v=>T+(hi-v)/(hi-lo)*ch;
+  const L=8,R=60,T=14,B=24,cw=W-L-R,ch=H-T-B;
+  const X=i=>L+(pts.length<2?cw/2:i*cw/(pts.length-1)),Y=v=>T+(hi-v)/(hi-lo)*ch;
   g.font='11.5px "Be Vietnam Pro",system-ui,sans-serif';g.textBaseline='middle';
-  /* lưới + trục giá trị */
-  g.strokeStyle='rgba(170,150,255,.16)';g.fillStyle='#9a91d6';g.lineWidth=1;
+  g.strokeStyle='rgba(140,160,210,.14)';g.fillStyle='#7c8bad';g.lineWidth=1;
   for(let v=lo;v<=hi+step/2;v+=step){const y=Y(v);g.beginPath();g.moveTo(L,y);g.lineTo(W-R,y);g.stroke();g.textAlign='left';g.fillText((v>0&&MODE==='net'?'+':'')+shortN(v),W-R+8,y)}
-  const zy=Y(base);g.save();g.setLineDash([4,4]);g.strokeStyle='rgba(255,255,255,.4)';g.beginPath();g.moveTo(L,zy);g.lineTo(W-R,zy);g.stroke();g.restore();
-  g.textAlign='center';g.fillStyle='#9a91d6';g.textBaseline='alphabetic';
-  g.fillText(pts.length>1?('ván '+pts[1].r):'',L+14,H-6);g.fillText(pts.length>1?('ván '+pts[pts.length-1].r):'',W-R-16,H-6);
+  const zy=Y(base);g.save();g.setLineDash([5,5]);g.strokeStyle='rgba(232,238,251,.38)';g.beginPath();g.moveTo(L,zy);g.lineTo(W-R,zy);g.stroke();g.restore();
+  g.textAlign='center';g.fillStyle='#7c8bad';g.textBaseline='alphabetic';
+  if(pts.length>1){g.fillText('ván '+pts[1].r,L+16,H-7);g.fillText('ván '+pts[pts.length-1].r,W-R-18,H-7)}
   PTS=pts.map((p,i)=>({x:X(i),y:Y(p.v),d:p}));
   if(pts.length<2)return;
-  const path=()=>{g.beginPath();PTS.forEach((p,i)=>i?g.lineTo(p.x,p.y):g.moveTo(p.x,p.y))};
-  const area=(clipTop,col0,col1,line)=>{
-    g.save();g.beginPath();if(clipTop)g.rect(0,0,W,zy);else g.rect(0,zy,W,H-zy);g.clip();
-    const gr=g.createLinearGradient(0,clipTop?T:zy,0,clipTop?zy:T+ch);gr.addColorStop(0,col0);gr.addColorStop(1,col1);
-    path();g.lineTo(PTS[PTS.length-1].x,zy);g.lineTo(PTS[0].x,zy);g.closePath();g.fillStyle=gr;g.fill();
-    path();g.shadowColor=line;g.shadowBlur=16;g.strokeStyle=line;g.lineWidth=2.8;g.lineJoin='round';g.stroke();g.restore()};
-  area(true,'rgba(45,255,156,.42)','rgba(45,255,156,0)','#2dff9c');
-  area(false,'rgba(255,77,121,0)','rgba(255,77,121,.42)','#ff4d79');
+  const path=(f)=>{g.beginPath();pts.forEach((p,i)=>{const y=Y(f(p));i?g.lineTo(X(i),y):g.moveTo(X(i),y)})};
+  if(D.ghost){[['g1','#4cc9ff'],['g2','#ffb020']].forEach(z=>{path(p=>p[z[0]]);g.strokeStyle=z[1];g.globalAlpha=.85;g.lineWidth=1.6;g.lineJoin='round';g.stroke();g.globalAlpha=1})}
+  const area=(top,c0,c1,line)=>{
+    g.save();g.beginPath();if(top)g.rect(0,0,W,zy);else g.rect(0,zy,W,H-zy);g.clip();
+    const gr=g.createLinearGradient(0,top?T:zy,0,top?zy:T+ch);gr.addColorStop(0,c0);gr.addColorStop(1,c1);
+    path(p=>p.v);g.lineTo(X(pts.length-1),zy);g.lineTo(X(0),zy);g.closePath();g.fillStyle=gr;g.fill();
+    path(p=>p.v);g.shadowColor=line;g.shadowBlur=14;g.strokeStyle=line;g.lineWidth=2.6;g.lineJoin='round';g.stroke();g.restore()};
+  area(true,'rgba(61,220,151,.38)','rgba(61,220,151,0)','#3ddc97');
+  area(false,'rgba(255,93,115,0)','rgba(255,93,115,.38)','#ff5d73');
   /* mốc rút tiền */
   const r0=pts[1]?pts[1].r:0;
-  (window.__logs||[]).filter(e=>e.kind==='wd'&&e.ok===true).forEach(e=>{
-    const idx=pts.findIndex(p=>p.r>=e.r&&p.r>0);const i=idx<0?pts.length-1:idx; if(e.r<r0&&RANGE>0)return;
-    const p=PTS[i];g.save();g.translate(p.x,p.y);g.rotate(Math.PI/4);g.fillStyle='#ffd23f';g.shadowColor='#ffd23f';g.shadowBlur=12;g.fillRect(-5.5,-5.5,11,11);g.restore()});
-  /* điểm cuối + con trỏ */
-  const last=PTS[PTS.length-1];g.beginPath();g.arc(last.x,last.y,4.5,0,7);const lc=pts[pts.length-1].v>=base?'#2dff9c':'#ff4d79';g.shadowColor=lc;g.shadowBlur=18;g.fillStyle=lc;g.fill();g.shadowBlur=0;
-  if(HOVER>=0&&PTS[HOVER]){const p=PTS[HOVER];g.strokeStyle='rgba(231,240,236,.4)';g.lineWidth=1;g.beginPath();g.moveTo(p.x,T);g.lineTo(p.x,T+ch);g.stroke();
-    g.beginPath();g.arc(p.x,p.y,5,0,7);g.fillStyle='#e7f0ec';g.fill()}
+  TK.forEach(k=>(a.tables[k].logs||[]).filter(e=>e.kind==='wd'&&e.ok===true).forEach(e=>{
+    const idx=pts.findIndex(p=>p.r>=e.r&&p.r>0);const i=idx<0?pts.length-1:idx;if(e.r<r0&&RANGE>0&&SRC!=='all')return;
+    const p=PTS[i];g.save();g.translate(p.x,p.y);g.rotate(Math.PI/4);g.fillStyle='#ffd166';g.shadowColor='#ffd166';g.shadowBlur=12;g.fillRect(-5.5,-5.5,11,11);g.restore()}));
+  const last=PTS[PTS.length-1],lc=pts[pts.length-1].v>=base?'#3ddc97':'#ff5d73';
+  g.beginPath();g.arc(last.x,last.y,4.8,0,7);g.shadowColor=lc;g.shadowBlur=18;g.fillStyle=lc;g.fill();g.shadowBlur=0;
+  if(HOVER>=0&&PTS[HOVER]){const p=PTS[HOVER];g.strokeStyle='rgba(232,238,251,.4)';g.lineWidth=1;g.beginPath();g.moveTo(p.x,T);g.lineTo(p.x,T+ch);g.stroke();g.beginPath();g.arc(p.x,p.y,5,0,7);g.fillStyle='#e8eefb';g.fill()}
 }
-function niceStep(r){const e=Math.pow(10,Math.floor(Math.log10(r)));const f=r/e;return (f<=1.5?1:f<=3?2:f<=7?5:10)*e}
-function shortN(v){const a=Math.abs(v);if(a>=1e6)return (v/1e6).toFixed(a>=1e7?0:1)+'M';if(a>=1e3)return (v/1e3).toFixed(a>=1e4?0:1)+'k';return Math.round(v)}
-gate();
+function niceStep(r){const e=Math.pow(10,Math.floor(Math.log10(r)));const f=r/e;return(f<=1.5?1:f<=3?2:f<=7?5:10)*e}
+function shortN(v){const a=Math.abs(v);if(a>=1e6)return(v/1e6).toFixed(a>=1e7?0:1)+'M';if(a>=1e3)return(v/1e3).toFixed(a>=1e4?0:1)+'k';return Math.round(v)}
 </script>
 </body>
-</html>
-"""
+</html>"""
 
 
 AB_SHELL = r"""<!doctype html>
@@ -9525,24 +9705,27 @@ AB_SHELL = r"""<!doctype html>
 <title>Auto cược LC79</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800;900&family=Orbitron:wght@600;800;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Unbounded:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box}
-body{margin:0;min-height:100vh;color:#f6f2ff;font:15px/1.5 'Be Vietnam Pro',system-ui,-apple-system,"Segoe UI",sans-serif;
-  background:radial-gradient(700px 420px at 12% 0%,rgba(255,63,164,.38),transparent 60%),radial-gradient(800px 520px at 92% 18%,rgba(91,59,255,.5),transparent 60%),radial-gradient(700px 500px at 40% 112%,rgba(18,216,255,.3),transparent 60%),#07041c}
+body{margin:0;min-height:100vh;color:#e8eefb;font:15px/1.5 'Be Vietnam Pro',system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased;
+  background:radial-gradient(620px 420px at 10% -4%,rgba(76,201,255,.2),transparent 70%),radial-gradient(620px 420px at 94% 0%,rgba(255,176,32,.15),transparent 70%),radial-gradient(800px 480px at 50% 120%,rgba(182,144,255,.16),transparent 70%),#060a13}
 #kg{min-height:100vh;display:grid;place-items:center;padding:24px}
-.kbox{width:100%;max-width:390px;border:1.5px solid transparent;border-radius:26px;padding:36px 28px;text-align:center;background:linear-gradient(#140b3a,#0d0628) padding-box,linear-gradient(115deg,#ff3fa4,#9b6bff,#27e6ff) border-box;box-shadow:0 0 54px rgba(155,107,255,.4)}
-.kbox h2{margin:0 0 6px;font-size:25px;font-weight:900;background:linear-gradient(115deg,#ff3fa4,#9b6bff,#27e6ff);-webkit-background-clip:text;background-clip:text;color:transparent}
-.kbox p{margin:0 0 20px;color:#b4ace4;font-size:14px}
-.kbox input{width:100%;height:48px;padding:0 15px;border-radius:13px;border:1px solid rgba(185,155,255,.42);background:#07041c;color:#f6f2ff;font:inherit;font-size:16px;margin-bottom:13px}
-.kbox input:focus{outline:0;border-color:#27e6ff;box-shadow:0 0 0 3px rgba(39,230,255,.22)}
-.kbox button{width:100%;height:48px;border:0;border-radius:13px;background:linear-gradient(120deg,#2dff9c,#27e6ff);color:#02261b;font:inherit;font-weight:900;font-size:15px;cursor:pointer;box-shadow:0 0 24px rgba(45,255,156,.5)}
-.kbox button:disabled{opacity:.6;cursor:wait}#kmsg{margin:12px 0 0!important;color:#ff4d79!important;min-height:20px}
+.kbox{width:100%;max-width:410px;border:1.5px solid transparent;border-radius:26px;padding:34px 28px 30px;text-align:center;background:linear-gradient(#0f1729,#0b1222) padding-box,linear-gradient(120deg,#4cc9ff,#b690ff 55%,#ffb020) border-box;box-shadow:0 30px 90px -30px rgba(182,144,255,.5)}
+.kmark{width:64px;height:64px;margin:0 auto 14px;display:block}
+.kbox h2{margin:0 0 6px;font-size:26px;font-weight:800;letter-spacing:-.01em}
+.kbox p{margin:0 0 22px;color:#8c9aba;font-size:14px}
+.kbox input{width:100%;height:50px;padding:0 16px;border-radius:14px;border:1px solid #34476f;background:#060a13;color:#e8eefb;font:inherit;font-size:16px;margin-bottom:13px}
+.kbox input:focus{outline:0;border-color:#4cc9ff;box-shadow:0 0 0 3px rgba(76,201,255,.2)}
+.kbox button{width:100%;height:50px;border:0;border-radius:14px;background:linear-gradient(110deg,#4cc9ff,#3ddc97 55%,#ffb020);color:#04121a;font:inherit;font-weight:800;font-size:15px;cursor:pointer;box-shadow:0 12px 32px -10px rgba(61,220,151,.6)}
+.kbox button:disabled{opacity:.6;cursor:wait}
+#kmsg{margin:12px 0 0!important;color:#ff5d73!important;min-height:20px;font-weight:600}
 </style></head><body>
 <div id="kg"><div class="kbox">
-  <h2>🎲 Auto cược LC79</h2>
-  <p>Nhập key Auto cược LC để mở công cụ</p>
-  <input id="kin" type="password" placeholder="Nhập key auto cược LC" autocomplete="off" autocapitalize="characters" spellcheck="false">
+  <svg class="kmark" viewBox="0 0 44 44" aria-hidden="true"><rect x="2" y="9" width="27" height="27" rx="8" fill="#0f1729" stroke="#4cc9ff" stroke-width="2.2"/><circle cx="10" cy="17" r="2.4" fill="#4cc9ff"/><circle cx="21" cy="28" r="2.4" fill="#4cc9ff"/><circle cx="15.5" cy="22.5" r="2.4" fill="#4cc9ff"/><rect x="15" y="4" width="27" height="27" rx="8" fill="#0f1729" stroke="#ffb020" stroke-width="2.2"/><circle cx="23" cy="12" r="2.4" fill="#ffb020"/><circle cx="34" cy="23" r="2.4" fill="#ffb020"/><circle cx="23" cy="23" r="2.4" fill="#ffb020"/><circle cx="34" cy="12" r="2.4" fill="#ffb020"/></svg>
+  <h2>Auto cược LC79</h2>
+  <p>Nhập key auto cược LC để mở công cụ</p>
+  <input id="kin" type="password" placeholder="Key auto cược LC" autocomplete="off" autocapitalize="characters" spellcheck="false">
   <button id="kgo" type="button">Vào</button>
   <p id="kmsg"></p>
 </div></div>
