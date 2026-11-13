@@ -24,7 +24,7 @@ Endpoint:
     ...?hist=N                   -> (mọi game) thêm lich_su: N ván đúng/sai gần nhất, mới -> cũ
     GET /api/predictlcmd5        -> [LC MD5] JSON dự đoán (game="lc79", ban="lcmd5"; tên cũ Tele68 MD5 — /api/predicttele68txmd5 vẫn chạy như alias); nguồn trả CẢ DANH SÁCH ~105 phiên, tool chỉ lưu thêm phiên chưa có, dự đoán phiên mới nhất + 1 và giữ tới khi API trả kết quả phiên đó (xem khối "CONFIG LC")
     GET /api/predictlchu         -> [LC HŨ] JSON dự đoán (game="lc79", ban="lchu"); nguồn https://wtx.tele68.com/v1/tx/sessions (cùng định dạng list với LC MD5), config + data RIÊNG (khối "CONFIG LC"). Key game LC79 dùng được cả 2 bàn LC
-    GET /tool/autocuoc           -> [AUTO CƯỢC LC79 · 1 TÀI KHOẢN = 1 TAB, 2 BÀN MD5 + HŨ: luật cược riêng từng bàn, mục tiêu lãi + tự rút DÙNG CHUNG] trang web điều khiển auto cược + auto rút (thay bot Telegram): đăng nhập LC79, bật/tắt từng luật (x2 thắng/thua, giảm cược, pause, mục tiêu lãi, tự rút Momo/Ngân hàng), biểu đồ lãi/lỗ. GIAO DIỆN BỊ ẨN: chỉ có ô nhập KEY AUTO CƯỢC LC (game "autolc", tiền tố AUTOLC-, tạo ở /api/admin); nhập đúng key mới nhận được giao diện, và MỖI request /tool/autocuoc/api/* (kể cả nhận dự đoán) đều phải kèm X-User-Key + X-HWID. Mỗi key chỉ thấy tài khoản LC79 của mình; key hết hạn -> phiên auto cược tự dừng. Chạy gunicorn --workers 1 (xem khối "AUTO CƯỢC LC79")
+    GET /tool/autocuoc           -> (chuyển hướng 302 sang https://autocuoclc79.netlify.app/ — đổi bằng AUTOBET_UI_URL) [AUTO CƯỢC LC79 · 1 TÀI KHOẢN = 1 TAB, 2 BÀN MD5 + HŨ: luật cược riêng từng bàn, mục tiêu lãi + tự rút DÙNG CHUNG] trang web điều khiển auto cược + auto rút (thay bot Telegram): đăng nhập LC79, bật/tắt từng luật (x2 thắng/thua, giảm cược, pause, mục tiêu lãi, tự rút Momo/Ngân hàng), biểu đồ lãi/lỗ. GIAO DIỆN BỊ ẨN: chỉ có ô nhập KEY AUTO CƯỢC LC (game "autolc", tiền tố AUTOLC-, tạo ở /api/admin); nhập đúng key mới nhận được giao diện, và MỖI request /tool/autocuoc/api/* (kể cả nhận dự đoán) đều phải kèm X-User-Key + X-HWID. Mỗi key chỉ thấy tài khoản LC79 của mình; key hết hạn -> phiên auto cược tự dừng. Chạy gunicorn --workers 1 (xem khối "AUTO CƯỢC LC79")
     GET /api/html                -> panel HTML theo dõi Sun + Hit, đổi qua lại, chọn số ván lịch sử. CHỈ MỞ KHI ADMIN CHÍNH DUYỆT THIẾT BỊ (HWID): máy lạ thấy bảng "Đang chờ admin duyệt", được duyệt thì tự mở, KHÔNG cần key, vào cả Sun + Hit
     GET /api/panel/status        -> panel hỏi trạng thái duyệt của thiết bị này (gửi yêu cầu lần đầu): {"status": "approved" | "pending" | "denied" | "limit"} (xem khối "DUYỆT THIẾT BỊ VÀO PANEL")
     GET /api/admin/panel (+ POST /approve · /deny · /remove · /ban · /unban) -> admin CHÍNH xem + duyệt / từ chối / gỡ quyền / BAN (danh sách đen: chặn cả IP + thiết bị khỏi /api/html, trả 404) thiết bị vào panel (mục "Duyệt thiết bị vào panel HTML" ở trang /api/admin)
@@ -4362,7 +4362,7 @@ def ip_health():
 
 
 # ─── FLASK ────────────────────────────────────────────────────────────────
-from flask import Flask, Response, abort, request  # noqa: E402
+from flask import Flask, Response, abort, redirect, request  # noqa: E402
 from flask import g as flask_g  # noqa: E402  (đặt tên khác vì nhiều hàm dùng biến cục bộ `g`)
 
 os.umask(0o077)                                    # file dữ liệu (key / thiết bị / phiên) chỉ chủ tiến trình đọc được
@@ -4376,7 +4376,8 @@ def _json(obj, status=200):
 
 
 import collections as _collections  # noqa: E402
-from werkzeug.exceptions import HTTPException as _HTTPExc  # noqa: E402
+from werkzeug.exceptions import HTTPException as _HTTPExc, NotFound as _NotFound  # noqa: E402
+HTTPException_ = _HTTPExc
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  🛡  LỚP BẢO MẬT (SEC)  —  env chỉnh được
@@ -4456,6 +4457,35 @@ _CORS_EXACT = {"/", "/health", "/api/key/check", "/api/predictsun", "/api/predic
                "/api/predictlcmd5", "/api/predictlchu", "/api/predicttele68txmd5", "/api/notice"}
 _NOFRAME_PREFIX = ("/api/admin", "/tool/autocuoc", "/api/autocuoc", "/autocuoc")
 
+# ── AUTO CƯỢC: GIAO DIỆN TÁCH RA FILE HTML RIÊNG (autocuoc.html), server chỉ còn là API ──────────────────────────
+#   AUTOBET_SERVE_UI=0 (mặc định)  server KHÔNG còn trả giao diện: /tool/autocuoc, /tool/autocuoc/ui (+ alias) -> 404. =1 để bật lại giao diện cũ.
+#   AUTOBET_ALLOWED_ORIGINS        danh sách origin của PANEL chứa file autocuoc.html, cách nhau dấu phẩy, vd: https://panel.example.com
+#                                  (file mở thẳng từ ổ đĩa có Origin "null" -> phải ghi rõ "null"; "*" = mọi origin, KHÔNG khuyên dùng).
+#                                  Chỉ origin trong danh sách mới được gọi chéo /tool/autocuoc/api/* từ trình duyệt; origin khác bị chặn như cũ.
+#   Mọi request vẫn BẮT BUỘC X-User-Key (key autolc) + X-HWID: CORS chỉ quyết định trình duyệt có cho trang khác đọc phản hồi hay không,
+#   KHÔNG thay cho xác thực. Xác thực và gắn thiết bị vẫn nằm hoàn toàn ở server (_ab_gate).
+#   AUTOBET_UI_URL                 LINK GIAO DIỆN AUTO CƯỢC (mặc định https://autocuoclc79.netlify.app/). Khi AUTOBET_SERVE_UI=0, mở /tool/autocuoc
+#                                  (và /api/autocuoc, /autocuoc) sẽ tự chuyển hướng sang link này. Origin của link này luôn được tự thêm vào
+#                                  AUTOBET_ALLOWED_ORIGINS để trang đó gọi được API. Đặt AUTOBET_UI_URL="" để tắt chuyển hướng (quay lại trả 404).
+AB_SERVE_UI = _env_bool("AUTOBET_SERVE_UI", False)
+AB_API_PREFIX = "/tool/autocuoc/api/"
+AB_UI_URL = os.environ.get("AUTOBET_UI_URL", "https://autocuoclc79.netlify.app/").strip()
+if AB_UI_URL and not AB_UI_URL.lower().startswith(("http://", "https://")):
+    AB_UI_URL = ""                                       # chỉ nhận link http(s) — tránh chuyển hướng tới scheme lạ (javascript:, data:...)
+AB_ALLOWED_ORIGINS = {o.strip().rstrip("/").lower() for o in os.environ.get("AUTOBET_ALLOWED_ORIGINS", "").split(",") if o.strip()}
+if AB_UI_URL:                                            # origin của trang giao diện luôn được phép gọi chéo API (vẫn bắt buộc key + HWID)
+    _ab_ui_p = urllib.parse.urlsplit(AB_UI_URL)
+    if _ab_ui_p.scheme and _ab_ui_p.netloc:
+        AB_ALLOWED_ORIGINS.add(f"{_ab_ui_p.scheme}://{_ab_ui_p.netloc}".lower())
+
+
+def _ab_origin_ok():
+    """Request tới /tool/autocuoc/api/* có Origin nằm trong AUTOBET_ALLOWED_ORIGINS không (chỉ để cho phép gọi chéo từ file HTML auto cược)."""
+    if not AB_ALLOWED_ORIGINS or not request.path.startswith(AB_API_PREFIX):
+        return False
+    o = request.headers.get("Origin", "").strip().rstrip("/").lower()
+    return bool(o) and ("*" in AB_ALLOWED_ORIGINS or o in AB_ALLOWED_ORIGINS)
+
 
 def _is_https():
     return request.is_secure or request.headers.get("X-Forwarded-Proto", "").split(",")[-1].strip().lower() == "https"
@@ -4469,6 +4499,12 @@ def _cors(resp):
         resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
         resp.headers["Access-Control-Allow-Headers"] = request.headers.get("Access-Control-Request-Headers") or "Content-Type, X-User-Key, X-HWID, X-HWID-ALT, X-HWID-FRESH, X-Device-Token"
         resp.headers["Access-Control-Max-Age"] = "600"
+    elif _ab_origin_ok():                               # API auto cược: CHỈ origin của panel (AUTOBET_ALLOWED_ORIGINS) mới được trình duyệt cho đọc phản hồi
+        resp.headers["Access-Control-Allow-Origin"] = "*" if "*" in AB_ALLOWED_ORIGINS else request.headers.get("Origin", "")
+        resp.headers["Vary"] = "Origin"
+        resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        resp.headers["Access-Control-Allow-Headers"] = "Content-Type" if AB_ENC_REQUIRED else "Content-Type, X-User-Key, X-HWID, X-HWID-ALT, X-HWID-FRESH"
+        resp.headers["Access-Control-Max-Age"] = "600"
     resp.headers["Cache-Control"] = "no-store"
     resp.headers["X-Content-Type-Options"] = "nosniff"
     resp.headers["Referrer-Policy"] = "no-referrer"
@@ -4477,7 +4513,7 @@ def _cors(resp):
     if "Content-Security-Policy" not in resp.headers:
         resp.headers["Content-Security-Policy"] = "frame-ancestors 'none'; base-uri 'none'; object-src 'none'; form-action 'self'"
     resp.headers["Cross-Origin-Opener-Policy"] = "same-origin"
-    resp.headers["Cross-Origin-Resource-Policy"] = "same-origin" if p not in _CORS_EXACT else "cross-origin"
+    resp.headers["Cross-Origin-Resource-Policy"] = "same-origin" if (p not in _CORS_EXACT and not _ab_origin_ok()) else "cross-origin"
     resp.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=()"
     if _is_https():
         resp.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
@@ -4565,6 +4601,8 @@ def _probe_guard():
 @app.before_request
 def _csrf_origin():
     """POST / PUT / DELETE có Origin khác host (trang web lạ gọi chéo) -> 403, trừ các endpoint công khai dùng key (có CORS)."""
+    if _ab_origin_ok():                                 # panel auto cược đã khai báo (AUTOBET_ALLOWED_ORIGINS) -> bỏ qua kiểm origin; xác thực vẫn bằng key + HWID trong _ab_gate
+        return None
     if request.method in ("POST", "PUT", "PATCH", "DELETE") and request.path not in _CORS_EXACT:
         o = request.headers.get("Origin", "")
         if o and o != "null":
@@ -4580,6 +4618,8 @@ def _csrf_origin():
 @app.errorhandler(Exception)
 def _on_exception(e):
     if isinstance(e, _HTTPExc):
+        if e.code == 405:
+            e = _NotFound()                              # sai method cũng 404: không lộ đường nào có thật
         if e.code == 404 and request.path not in ("/api/html", "/api/html/ui", "/api/panel/status"):     # 2 đường này trả 404 có chủ ý cho thiết bị bị ban -> không tính là dò quét
             _pg_strike(client_ip(), 1)
         if e.code == 413:
@@ -4681,6 +4721,40 @@ if not _ENV_MAIN_PASS:                                # chưa đặt SUNVIW_MAIN
     print("[SEC] !!! SUNVIW_MAIN_PASS CHUA DAT. Mat khau admin TAM (het hieu luc khi restart): " + _TEMP_PASS + "  -> dat SUNVIW_MAIN_PASS (>= 16 ky tu) o Railway Variables", file=sys.stderr)
 ADMIN_PASS_HASH = _pw_hash(_ENV_MAIN_PASS or _TEMP_PASS)
 _MEM_SECRET = secrets.token_hex(32)
+
+
+def _admin_slug():
+    """Đường dẫn BÍ MẬT của trang + API admin. Đặt SUNVIW_ADMIN_PATH (>= 8 ký tự a-z A-Z 0-9 _ -); không đặt thì suy ra cố định từ SUNVIW_SECRET / mật khẩu admin chính (HMAC, không đảo ngược được)."""
+    v = re.sub(r"[^A-Za-z0-9_-]", "", os.environ.get("SUNVIW_ADMIN_PATH", "")).strip("-_")
+    if len(v) >= 8:
+        return v[:64]
+    key = (os.environ.get("SUNVIW_SECRET") or _ENV_MAIN_PASS or _TEMP_PASS).encode("utf-8")
+    return "c" + hmac.new(key, b"sunviw-admin-path", hashlib.sha256).hexdigest()[:23]
+
+
+ADMIN_SLUG = _admin_slug()
+print(f"[SEC] Trang admin CHI mo o /{ADMIN_SLUG}  (duong /api/admin cu va moi /api/admin/* tu ngoai deu tra 404) - hay luu lai, dat SUNVIW_ADMIN_PATH de tu chon", file=sys.stderr)
+
+
+class _AdminMask:
+    """Lớp WSGI ngoài cùng: /<ADMIN_SLUG>/... được ánh xạ nội bộ thành /api/admin/... (code bên trong + chữ ký HMAC vẫn dùng đường dẫn gốc);
+    còn /api/admin* gọi trực tiếp từ bên ngoài -> 404 như đường không tồn tại (người dùng thường không dò ra được admin)."""
+
+    def __init__(self, inner):
+        self.inner = inner
+        self.pfx = "/" + ADMIN_SLUG
+
+    def __call__(self, environ, start_response):
+        p = environ.get("PATH_INFO", "")
+        if p == self.pfx or p.startswith(self.pfx + "/"):
+            q = "/api/admin" + p[len(self.pfx):]
+            environ["PATH_INFO"] = q.rstrip("/") if q.startswith("/api/admin/") and q.count("/") == 3 else q
+        elif p.lower().startswith("/api/admin"):
+            environ["PATH_INFO"] = "/__nf__"
+        return self.inner(environ, start_response)
+
+
+app.wsgi_app = _AdminMask(app.wsgi_app)
 _kv_lock = threading.RLock()
 _KEY_ALPHA = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"        # bỏ 0/O/1/I cho dễ đọc
 
@@ -5977,7 +6051,7 @@ def _gate_key():
         flask_g.panel = True
         return None
     if p in _PANEL_ONLY:
-        return _json({"ok": False, "loi": "forbidden"}, 403)
+        abort(404)                                      # key khách gọi endpoint chỉ-panel -> 404 như đường không tồn tại
     if not KEY_GATE_API and p not in OFFSRV_PATHS:      # SUNVIW_GATE_API=0 chỉ nới các endpoint phụ — endpoint DỰ ĐOÁN luôn đòi key do admin tạo (không có chuyện dùng free)
         return None
     if not _rate_ok(f"ip:{ip}", RATE_IP):
@@ -6062,13 +6136,13 @@ def api_admin_login():
     with _kv_lock:
         d = _kv_load()
         rec = d["keys"].get(k) if k else None
-        if rec:                                          # key có trong file -> phân loại theo type
+        if rec and rec.get("type") != "sub":             # key người dùng KHÔNG được lộ là "có thật": phản hồi y hệt key không tồn tại
+            rec = None
+        if rec:                                          # key admin phụ
             if _is_expired(rec, now):
-                return _json({"ok": False, "kind": rec.get("type"), "loi": "Key này đã hết hạn."}, 403)
-            if rec.get("type") != "sub":
-                return _json({"ok": False, "kind": "user", "loi": "Key hợp lệ nhưng chỉ dùng để vào tool ở panel /api/html, không phải key admin."}, 403)
+                return _json({"ok": False, "kind": "sub", "loi": "Key này đã hết hạn."}, 403)
             if not hw:
-                return _json({"ok": False, "kind": "sub", "loi": "Thiếu mã thiết bị (HWID) — hãy mở trang /api/admin bằng trình duyệt, hoặc tool phải gửi header X-HWID."}, 400)
+                return _json({"ok": False, "kind": "sub", "loi": "Thiếu mã thiết bị (HWID) — hãy mở trang admin bằng trình duyệt, hoặc tool phải gửi header X-HWID."}, 400)
             fresh = False
             if not rec.get("owner"):                     # key admin phụ chưa ai dùng -> nhập username, gắn username + thiết bị đầu tiên
                 if not str(b.get("username") or "").strip():
@@ -6559,7 +6633,7 @@ async function api(p,body){
   if(s0)o.headers['X-Admin-Token']=s0.token;
   if(body!==undefined){o.method='POST';o.body=JSON.stringify(body)}
   if(s0&&s0.sk){try{const u=new URL(p,location.origin),ts=String(Math.floor(Date.now()/1000)),nn=_hex(crypto.getRandomValues(new Uint8Array(16)));o.headers['X-Ts']=ts;o.headers['X-Nonce']=nn;o.headers['X-Sig']=await _hmac(s0.sk,[(o.method||'GET'),u.pathname+u.search,ts,nn,await _sha(o.body||'')].join('\n'))}catch(e){return{ok:false,loi:'Trình duyệt không hỗ trợ ký request (cần HTTPS).'}}}
-  let r,j={};try{r=await fetch(p,o);j=await r.json()}catch(e){j={ok:false,loi:'Không kết nối được server'}}
+  let r,j={};try{r=await fetch(p.indexOf('/api/admin')===0?ADMX+p.slice(10):p,o);j=await r.json()}catch(e){j={ok:false,loi:'Không kết nối được server'}}
   if(r&&r.status===401&&S){S=null;sessionStorage.removeItem('as');login0('Phiên đã hết hạn hoặc thiết bị đã bị gỡ khỏi key — nhập key lại.')}
   return j}
 /* ── đăng nhập ── */
@@ -6822,7 +6896,7 @@ setInterval(()=>{if(S&&isM()&&$('#vw')&&!document.hidden){loadPv();loadOs();if(V
 if(S)boot();else login0();
 </script></body></html>
 """
-ADMIN_HTML = ADMIN_HTML.replace("/*__HWID_JS__*/", HWID_JS)
+ADMIN_HTML = ADMIN_HTML.replace("/*__HWID_JS__*/", HWID_JS + "\nconst ADMX='/" + ADMIN_SLUG + "';")
 
 
 @app.route("/api/ips")
@@ -7204,6 +7278,13 @@ AB_MULTI = 1.98                        # hệ số nhân tiền thắng
 AB_PATH = os.environ.get("AUTOBET_PATH", _data_path("autobet_sessions.json"))
 AB_LOCK_PATH = AB_PATH + ".lock"
 AB_SAVE_PW = _env_bool("AUTOBET_SAVE_PW", False)
+AB_SETTLE = 2.5                         # giây tối thiểu sau 1 sự kiện (đặt cược / có kết quả / rút) mới tin số dư thật đọc được — nhà cái cần thời gian trừ / cộng tiền
+AB_RECON_TRIES = 8                      # số lần đọc ví thật tối đa cho 1 lần ĐỐI SOÁT (cách nhau AB_RECON_GAP giây)
+AB_RECON_GAP = 1.5
+AB_RECON_MAX = _env_num("AUTOBET_RECON_MAX", 1.2, float)   # chênh lệch ví thật so với sổ cược chỉ được tính vào LÃI/LỖ khi <= hệ số này x tổng tiền cược các ván vừa chấm (lớn hơn = nạp / rút tay -> chỉ chỉnh số dư)
+_ab_mult = {}                           # bàn -> hệ số thắng HỌC TỪ VÍ THẬT (mặc định AB_MULTI)
+_ab_mult_obs = {}                       # bàn -> lần quan sát gần nhất (cần 2 lần liên tiếp khớp mới áp dụng)
+_ab_recon_lk = threading.RLock()        # ví là CHUNG cho 2 bàn -> đối soát tuần tự
 AB_SYNC_DELAY = 2.0                     # giây chờ sau khi CÓ KẾT QUẢ ván rồi mới quét số dư thật (chỉ quét theo sự kiện: sau khi đặt cược + sau kết quả, KHÔNG quét định kỳ)
 AB_TICK = 1.5                          # giây giữa 2 lần kiểm tra phiên mới / kết quả
 AB_SERIES_KEEP = 1500                  # số ván giữ cho biểu đồ
@@ -7394,6 +7475,11 @@ AB_BET_MODE = os.environ.get("AUTOBET_BET_MODE", "ws").strip().lower()   # "ws" 
 AB_BET_TIMEOUT = 8.0
 AB_WS_STALE = 15.0          # quá N giây không nhận tick-update -> coi như mất đồng bộ
 AB_WS_FALLBACK = _env_bool("AUTOBET_WS_FALLBACK", True)   # WS không nghe được state (chưa cài thư viện / sai URL / mất kết nối) -> vẫn POST cược ngay khi có dự đoán phiên mới, y như bot_lc79_v23.py (đặt AUTOBET_WS_FALLBACK=0 để BẮT BUỘC có state BETTING mới cược)
+
+
+def ab_mult(table):
+    """Hệ số tiền thắng đang dùng cho bàn: giá trị đã HỌC từ ví thật, chưa có thì AB_MULTI."""
+    return _ab_mult.get(table) or AB_MULTI
 
 
 def _ab_url_host(u):
@@ -7894,12 +7980,24 @@ class AbLedger:
         self.rounds += 1
         return {"r": self.rounds, "phien": phien, "side": side, "amount": amount, "res": None, "pnl": -amount, "win": None}
 
-    def resolve(self, e, result):
+    def adjust(self, e, corr):
+        """Chỉnh lãi/lỗ ván `e` đã chấm theo số tiền THẬT của ví (corr = thực tế - ước tính); các điểm biểu đồ sau đó dịch theo."""
+        e["pnl"] += corr
+        self.pnl += corr
+        hit = False
+        for pt in self.series:
+            if pt.get("r") == e.get("r") and pt.get("phien") == e.get("phien"):
+                pt["pnl"] = e["pnl"]
+                hit = True
+            if hit:
+                pt["net"] = pt.get("net", 0) + corr
+
+    def resolve(self, e, result, mult=None):
         e["res"] = result
         win = e["side"] == result
         e["win"] = win
         if win:
-            payout = math.floor(e["amount"] * AB_MULTI)
+            payout = math.floor(e["amount"] * (mult or AB_MULTI))
             self.balance += payout
             e["pnl"] = payout - e["amount"]
             self.w += 1
@@ -8007,6 +8105,8 @@ class AbSession:
         self._grp_stop = None              # (lý do, thông báo): bàn này sẽ tự dừng ngay khi ván THẬT đang chờ có kết quả
         self._sync_lk = threading.Lock()   # tuần tự hoá các lần quét số dư (không 2 lần chạy chồng nhau)
         self._login_money = None           # số dư lấy từ lần đăng nhập lại gần nhất (dự phòng khi API số dư không đọc được)
+        self._ev_t = 0.0                   # lúc xảy ra sự kiện tiền gần nhất (đặt cược / kết quả / rút) — đối soát đợi đủ AB_SETTLE giây sau đó
+        self._unrec = []                   # các ván đã chấm nhưng CHƯA đối soát với ví thật
         self._jwt_chk = 0.0                # lần cuối kiểm tra hạn JWT
         self.thread = None
         self.ws = AbWs(self)               # WebSocket cược của bàn (Socket.IO /txmd5 hoặc /tx)
@@ -8245,7 +8345,7 @@ class AbSession:
                     self.ledger.rounds -= 1
                     self.ledger.staked -= int(o["entry"].get("amount") or 0)
                     self.log("warn", f"Phiên #{o['phien']} không có kết quả từ nguồn — đã bỏ qua ván, đồng bộ lại số dư")
-                    self._sync_balance(o["phien"])
+                    self._sync_after(AB_SETTLE, check_target=False)        # đối soát ở luồng nền (không chặn vòng cược)
             return
         if not self.alive or self.hold:
             return
@@ -8291,9 +8391,12 @@ class AbSession:
             return
         self.last_phien = phien
         entry = self.ledger.bet(side, self.current_bet, phien)
+        entry["bt"] = self._ev_t = time.time()
+        for sib in _ab_siblings(self):                                     # ví CHUNG 2 bàn: tiền cược trừ ở cả 2 sổ
+            sib.ledger.balance -= entry["amount"]
         self.open = {"phien": phien, "side": side, "entry": entry}
         self.log("bet", f"#{phien} đặt {'Tài' if side == 'TAI' else 'Xỉu'} {self.current_bet:,}", phien=phien)
-        self._sync_after(0.0, check_target=False)                          # quét số dư NGAY sau khi đặt cược (tiền cược vừa trừ -> không thể vừa đạt mục tiêu)
+        self._sync_after(AB_SETTLE, check_target=False)                    # đợi nhà cái trừ tiền rồi đối soát với ví thật (xác nhận cược có thật · không đọc sớm gây lệch)
 
     def _on_result(self, o, actual):
         """Có kết quả phiên o['phien'] (actual = TÀI | XỈU)."""
@@ -8313,8 +8416,14 @@ class AbSession:
                 self.log("virt", f"#{phien} (theo dõi ảo) {'✅' if virt_win else '❌'} — còn cần thắng {need} ván liên tiếp", ok=virt_win)
             return
         entry = o["entry"]
-        win = self.ledger.resolve(entry, res)
+        win = self.ledger.resolve(entry, res, ab_mult(self.table))
         pnl = entry["pnl"]
+        entry["st"] = self._ev_t = time.time()
+        if win:
+            for sib in _ab_siblings(self):                                 # ví CHUNG: tiền thắng cộng ở cả 2 sổ
+                sib.ledger.balance += pnl + entry["amount"]
+        self._unrec.append(entry)
+        del self._unrec[:-50]
         self.log("win" if win else "loss", f"#{phien} KQ {res_txt} · {'+' if pnl > 0 else ''}{pnl:,}", phien=phien, pnl=pnl)
         if win:
             was_reduced, was_x2 = self._is_reduced, self._x2_active
@@ -8325,12 +8434,12 @@ class AbSession:
                 self.log("info", f"Thắng x2 — về cược gốc {self.current_bet:,}")
             elif was_x2 is False and self._x2_active:
                 self.log("info", f"Thắng {self.win_streak} ván liên tiếp — x2 cược: {self.current_bet:,}")
-            if self.hit_target():
-                time.sleep(AB_SYNC_DELAY)                                  # chờ nhà cái cộng tiền thắng rồi quét số dư thật
+            if self.hit_target():                                          # đạt mục tiêu theo sổ -> ĐỐI SOÁT ví thật trước (lãi chưa có thật thì không dừng / không rút)
                 with self._sync_lk:
                     self._sync_balance(phien, check_target=False)
-                self._finish_target()                                      # dừng toàn bộ cược (+ rút luôn nếu đã chọn)
-                return
+                if self.hit_target():
+                    self._finish_target()                                  # dừng toàn bộ cược (+ rút luôn nếu đã chọn)
+                    return
         else:
             self.on_loss()
             if self._loss_x2_triggered and self.loss_streak == self.cfg["loss_x2_streak"]:
@@ -8383,28 +8492,91 @@ class AbSession:
         threading.Thread(target=run, daemon=True, name=f"abbal-{self.sid}").start()
 
     def _sync_balance(self, phien, check_target=True):
-        real = ab_fetch_balance(self.jwt)
-        if real is None and self._relogin():
-            real = ab_fetch_balance(self.jwt)
+        """ĐỐI SOÁT sổ cược với VÍ THẬT trên LC79 (ví dùng chung 2 bàn).
+        · Chỉ đọc khi sự kiện tiền gần nhất đã qua AB_SETTLE giây; chênh lệch chỉ được chấp nhận khi 2 lần đọc liên tiếp ra cùng 1 số (tránh đọc lúc nhà cái chưa trừ / chưa cộng tiền).
+        · Cược đã ghi sổ mà tiền KHÔNG rời ví -> nhà cái không nhận -> huỷ khỏi sổ. Chênh lệch nhỏ so với các ván vừa chấm -> chỉnh LÃI/LỖ theo thực tế (+ học hệ số thắng thật).
+        · Chênh lệch lớn (nạp / rút tay ngoài tool) -> chỉ đồng bộ số dư, KHÔNG tính vào lãi/lỗ (không gây đạt mục tiêu giả)."""
+        grp = [self] + _ab_siblings(self)
+        prev, real = None, None
+        for i in range(AB_RECON_TRIES):
+            if i:
+                time.sleep(AB_RECON_GAP)
+            if time.time() - max(x._ev_t for x in grp) < AB_SETTLE:
+                prev = None
+                continue
+            r = ab_fetch_balance(self.jwt)
+            if r is None and self._relogin():
+                r = ab_fetch_balance(self.jwt)
+            if r is None:
+                prev = None
+                continue
+            if r == self.ledger.balance or (prev is not None and r == prev and i >= 3):
+                real = r
+                break
+            prev = r
         if real is None:
             self._bal_fail += 1
             if self._bal_fail == 3:
-                self.log("warn", f"Không lấy được số dư thật ({self._bal_fail} lần) — đang dùng số dư ước tính {self.ledger.balance:,}")
+                self.log("warn", f"Chưa đối soát được số dư thật ({self._bal_fail} lần) — đang dùng số dư theo sổ {self.ledger.balance:,}")
             return
         self._bal_fail = 0
-        diff = real - self.ledger.balance
-        if diff:
-            if abs(diff) >= 500 or abs(diff) / max(self.ledger.balance, 1) >= 0.01:
-                self.log("info", f"Đồng bộ số dư: tool tính {self.ledger.balance:,} → thực tế {real:,} ({'+' if diff > 0 else ''}{diff:,})")
-            self.ledger.balance = real
-            if self.ledger.series:                                         # cập nhật điểm cuối của biểu đồ theo số dư thật
-                self.ledger.series[-1]["bal"] = real
-                self.ledger.series[-1]["net"] = self.ledger.net()
+        self._apply_real(grp, real)
         ab_save()
-        if check_target and self.alive and self.hit_target():              # quét số dư thật đạt ngưỡng lãi -> dừng hết + rút luôn
+        if check_target and self.alive and self.hit_target():              # ví thật xác nhận đạt ngưỡng lãi -> dừng hết + rút luôn
             self._finish_target()
         if self.alive:
             self._zero_guard()                                             # số dư thật về 0 -> dừng hẳn
+
+    def _apply_real(self, grp, real):
+        with _ab_recon_lk:
+            est = self.ledger.balance
+            diff = real - est
+            now = time.time()
+            if diff > 0:                                                   # tiền cược KHÔNG rời ví -> ván ghi sổ nhưng nhà cái chưa nhận
+                cand = [x for x in grp if x.open and x.open.get("entry") is not None and not x.open["entry"].get("conf")
+                        and now - x.open["entry"].get("bt", now) >= AB_SETTLE]
+                pick = None
+                for sub in ([[c] for c in cand] + ([cand] if len(cand) > 1 else [])):
+                    if sum(int(x.open["entry"]["amount"]) for x in sub) == diff:
+                        pick = sub
+                        break
+                for x in pick or []:
+                    en = x.open["entry"]
+                    amt = int(en["amount"])
+                    en["res"], en["win"], en["pnl"] = "?", None, 0
+                    x.ledger.rounds -= 1
+                    x.ledger.staked -= amt
+                    x.open = None
+                    x.log("warn", f"Phiên #{en['phien']}: nhà cái KHÔNG nhận cược (ví không bị trừ {amt:,}) — đã huỷ khỏi sổ cược", phien=en["phien"])
+                if pick:
+                    diff = 0
+            if diff == 0:
+                for x in grp:
+                    if x.open and x.open.get("entry") is not None:
+                        x.open["entry"]["conf"] = True                     # tiền cược đã thật sự rời ví
+            else:
+                ents = [(x, e) for x in grp for e in x._unrec]
+                stk = sum(int(e.get("amount") or 0) for _, e in ents)
+                if ents and abs(diff) <= AB_RECON_MAX * stk:
+                    x, e = max(ents, key=lambda p: p[1].get("st", 0))
+                    if len(ents) == 1 and e.get("win") and e["amount"] > 0:        # 1 ván thắng duy nhất -> suy ra hệ số tiền thắng thật của nhà cái
+                        m = (e["amount"] + e["pnl"] + diff) / e["amount"]
+                        if 1.0 < m <= 3.0:
+                            last = _ab_mult_obs.get(x.table)
+                            _ab_mult_obs[x.table] = m
+                            if last is not None and abs(last - m) <= 0.003:
+                                _ab_mult[x.table] = round(m, 4)
+                    x.ledger.adjust(e, diff)
+                    self.log("info", f"Đối soát ví thật: sổ {est:,} → thực tế {real:,} ({'+' if diff > 0 else ''}{diff:,}) — đã chỉnh lãi/lỗ ván #{e.get('phien')} theo thực tế")
+                else:
+                    self.log("info", f"Số dư ví lệch sổ cược ({'+' if diff > 0 else ''}{diff:,}): sổ {est:,} → thực tế {real:,} — chỉ đồng bộ số dư, KHÔNG tính vào lãi/lỗ")
+            for x in grp:
+                x.ledger.balance = real
+                x._unrec.clear()
+            L = max((x.ledger for x in grp if x.ledger.series), key=lambda q: q.series[-1].get("t", 0), default=None)
+            if L is not None:                                              # điểm cuối biểu đồ theo số dư + lãi/lỗ thật
+                L.series[-1]["bal"] = real
+                L.series[-1]["net"] = L.net()
 
     def _finish_target(self):
         """Đạt mục tiêu lãi CHUNG (tổng lãi MD5 + Hũ): DỪNG CẢ 2 BÀN trước, rồi (nếu đã chọn) rút về tài khoản đã chọn. Chỉ chạy 1 lần cho cả tài khoản."""
@@ -8440,6 +8612,8 @@ class AbSession:
                 bal = ab_fetch_balance(self.jwt)
             if bal is not None:
                 self.ledger.balance = bal
+                for sib in _ab_siblings(self):
+                    sib.ledger.balance = bal
             amt = c["target"] if bal is None else min(c["target"], bal)      # số dư không đủ ngưỡng thì rút tối đa số dư đang có
             if amt <= 0:
                 self.log("warn", "Rút: số dư bằng 0 — không có gì để rút", ok=False)
@@ -8456,7 +8630,10 @@ class AbSession:
                 time.sleep(3)
             if ok:
                 self.wd_count += 1
+                self._ev_t = time.time()
                 self.ledger.balance -= amt
+                for sib in _ab_siblings(self):                             # ví CHUNG: tiền rút trừ ở cả 2 sổ
+                    sib.ledger.balance -= amt
                 self.ledger.withdrawn += amt
                 self.log("wd", f"ĐÃ GỬI LỆNH RÚT {amt:,} → {dest}", amount=amt, ok=True)
             else:
@@ -8542,7 +8719,7 @@ def ab_save(force=False):
     _ab_save_t["t"] = now
     try:
         with _ab_lock:
-            data = {"luu_luc": _now(), "sessions": [s.dump() for s in _ab_sessions.values()]}
+            data = {"luu_luc": _now(), "mult": dict(_ab_mult), "sessions": [s.dump() for s in _ab_sessions.values()]}
         tmp = AB_PATH + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False)
@@ -8577,6 +8754,12 @@ def ab_boot():
             data = json.load(f)
     except Exception:  # noqa: BLE001
         return
+    for _t, _m in ((data.get("mult") or {}) if isinstance(data, dict) and isinstance(data.get("mult"), dict) else {}).items():
+        try:
+            if _t in AB_TABLES and 1.0 < float(_m) <= 3.0:
+                _ab_mult[_t] = float(_m)
+        except (TypeError, ValueError):
+            pass
     for d in (data.get("sessions") or []) if isinstance(data, dict) else []:
         try:
             u = str(d.get("username") or "")
@@ -8632,12 +8815,18 @@ def _ab_gate():
     """MỖI request tới /tool/autocuoc/api/* (và /tool/autocuoc/ui) PHẢI kèm KEY AUTO CƯỢC LC (header X-User-Key) + HWID thiết bị (header X-HWID) — y như các endpoint dự đoán.
     Key sai / hết hạn / sai game (key Sun · Hit · LC79 không dùng được ở đây) / thiết bị đã đủ chỗ -> 401 / 403, KHÔNG trả dữ liệu (kể cả dự đoán).
     Trả None nếu cho qua (và ghi flask_g.ab_key = key đang dùng), ngược lại trả Response."""
-    hw, alts, hfresh = req_hw_ids(request.get_json(silent=True) if request.method == "POST" else None)
+    pre = getattr(flask_g, "ab_env", None)
+    if pre is None and AB_ENC_REQUIRED:
+        abort(404)                                      # đường lẻ (header X-User-Key kiểu cũ) không còn tồn tại: chỉ nhận phong bì mã hoá /tool/autocuoc/api/x
+    if pre is not None:
+        hw, alts, hfresh, k = pre["hw"], pre["alts"], pre["fresh"], pre["k"]
+    else:
+        hw, alts, hfresh = req_hw_ids(request.get_json(silent=True) if request.method == "POST" else None)
+        k = _norm_key(request.headers.get("X-User-Key", ""))
     ip = client_ip()
     w = _rl_wait(ip)
     if w:
         return _json({"ok": False, "can_key": True, "loi": f"nhap sai qua nhieu, thu lai sau {w}s"}, 429)
-    k = _norm_key(request.headers.get("X-User-Key", ""))
     if not _rate_ok(f"abip:{ip}", RATE_IP) or (k and not _rate_ok(f"abk:{k}", 240)):
         return _too_many()
     rec, err, exists, kg = _check_user_key(k, hw, ip, request.headers.get("User-Agent", ""), alts, hfresh, "autolc", bind=AB_KEY_BIND_DEVICE)
@@ -8659,6 +8848,156 @@ def _ab_gate():
 
 def _ab_owner():
     return getattr(flask_g, "ab_key", "")
+
+
+def _ab_body():
+    """Body của request auto cược: trong phong bì mã hoá (đã giải mã) hoặc JSON thường (chế độ cũ)."""
+    pre = getattr(flask_g, "ab_env", None)
+    return pre["b"] if pre is not None else (request.get_json(silent=True) or {})
+
+
+def _ab_arg(name, default=""):
+    pre = getattr(flask_g, "ab_env", None)
+    return pre["b"].get(name, default) if pre is not None else request.args.get(name, default)
+
+
+# ── PHONG BÌ MÃ HOÁ cho /tool/autocuoc/api/x ────────────────────────────────────────────────────────────────
+#   Tab Network (F12) chỉ thấy MỘT đường duy nhất + chuỗi base64 vô nghĩa: không thấy key, tài khoản / mật khẩu LC79, HWID, lệnh (state / login / start / ...), số dư, lãi lỗ.
+#   Key KHÔNG bao giờ được gửi: client gửi kid = SHA256("ab-kid|"+KEY)[:16] + chữ ký HMAC; thân (lệnh + dữ liệu) mã hoá bằng keystream HMAC-SHA256-CTR có xác thực (tag 16 byte).
+#   Mỗi request có nonce 16 byte dùng 1 lần + mốc giờ (lệch > 300s bị loại) -> chống phát lại. Phản hồi cũng mã hoá bằng nonce riêng, gắn với nonce của request.
+#   Mọi lỗi tầng phong bì (kid lạ, sai chữ ký, hết hạn, phát lại, sai định dạng) -> 404 trống. Chỉ key AUTO CƯỢC LC mới có kid hợp lệ (key Sun / Hit / LC79 thường -> 404).
+#   AUTOBET_ENC_REQUIRED=0 (mặc định 1): nhận lại kiểu cũ (header X-User-Key) cho tool tự viết · LƯU Ý: giao diện cũ trong code (AUTOBET_SERVE_UI=1) cũng cần =0.
+AB_ENC_REQUIRED = _env_bool("AUTOBET_ENC_REQUIRED", True)
+AB_ENV_PATH = AB_API_PREFIX + "x"
+AB_ENV_SKEW = 300
+_ab_nonce_seen = {}
+_ab_nonce_lk = threading.Lock()
+_ab_kid_cache = {"t": 0.0, "map": {}}
+
+
+def _ab_kid(nk):
+    return hashlib.sha256(b"ab-kid|" + nk.encode("utf-8")).hexdigest()[:16]
+
+
+def _ab_kid_lookup(kid):
+    nk = _ab_kid_cache["map"].get(kid)
+    now = time.time()
+    if nk is None and now - _ab_kid_cache["t"] > 2.0:         # kid lạ -> nạp lại danh sách key AUTO CƯỢC (tối đa 1 lần / 2 giây, chống dội)
+        _ab_kid_cache["t"] = now
+        try:
+            keys = _kv_load()["keys"]
+        except Exception:  # noqa: BLE001
+            keys = {}
+        _ab_kid_cache["map"] = {_ab_kid(k): k for k, r in keys.items() if isinstance(r, dict) and _key_game(r) == "autolc"}
+        nk = _ab_kid_cache["map"].get(kid)
+    return nk
+
+
+def _ab_b64e(b):
+    return base64.urlsafe_b64encode(b).rstrip(b"=").decode("ascii")
+
+
+def _ab_b64d(x):
+    x = str(x)
+    return base64.urlsafe_b64decode(x + "=" * (-len(x) % 4))
+
+
+def _ab_ek_mk(nk, nonce):
+    kb = nk.encode("utf-8")
+    return hmac.new(kb, b"E|" + nonce, hashlib.sha256).digest(), hmac.new(kb, b"M|" + nonce, hashlib.sha256).digest()
+
+
+def _ab_xor_ks(ek, data):
+    n = len(data)
+    ks = b"".join(hmac.new(ek, i.to_bytes(4, "big"), hashlib.sha256).digest() for i in range((n + 31) // 32))[:n]
+    return (int.from_bytes(data, "big") ^ int.from_bytes(ks, "big")).to_bytes(n, "big") if n else b""
+
+
+def _ab_replay_ok(kid, nonce):
+    now = time.time()
+    k = kid + _ab_b64e(nonce)
+    with _ab_nonce_lk:
+        if len(_ab_nonce_seen) > 20000:
+            for x in [x for x, e in _ab_nonce_seen.items() if e < now]:
+                del _ab_nonce_seen[x]
+            if len(_ab_nonce_seen) > 20000:
+                _ab_nonce_seen.clear()
+        if _ab_nonce_seen.get(k, 0) > now:
+            return False
+        _ab_nonce_seen[k] = now + AB_ENV_SKEW * 2 + 5
+    return True
+
+
+def _ab_op_ping():
+    g = _ab_gate()
+    if g is not None:
+        return g
+    return _json({"ok": True, "t": int(time.time())})
+
+
+@app.route(AB_ENV_PATH, methods=["POST"])
+def tool_autocuoc_env():
+    ip = client_ip()
+    if not _rate_ok(f"abe:{ip}", 900):
+        abort(404)
+    raw = request.get_data(cache=False)
+    if not raw or len(raw) > 65536:
+        abort(404)
+    try:
+        e = json.loads(raw)
+        kid, nonce, ts = str(e["k"]), _ab_b64d(e["n"]), int(e["t"])
+        ct, tag = _ab_b64d(e["c"]), _ab_b64d(e["m"])
+    except Exception:  # noqa: BLE001
+        abort(404)
+    if len(nonce) != 16 or len(tag) != 16 or abs(time.time() - ts) > AB_ENV_SKEW:
+        abort(404)
+    nk = _ab_kid_lookup(kid)
+    if not nk:
+        if not _rate_ok(f"bad:{ip}", RATE_BADKEY):
+            _pg_strike(ip, 2)
+        abort(404)
+    ek, mk = _ab_ek_mk(nk, nonce)
+    want = hmac.new(mk, b"q|" + kid.encode() + b"|" + str(ts).encode() + b"|" + nonce + ct, hashlib.sha256).digest()[:16]
+    if not hmac.compare_digest(want, tag):
+        _pg_strike(ip, 2)
+        abort(404)
+    if not _ab_replay_ok(kid, nonce):
+        abort(404)
+    try:
+        req = json.loads(_ab_xor_ks(ek, ct).decode("utf-8"))
+        op, h, body = str(req.get("op") or ""), req.get("h") or {}, req.get("b") or {}
+        if not isinstance(h, dict) or not isinstance(body, dict):
+            raise ValueError
+    except Exception:  # noqa: BLE001
+        abort(404)
+    alts = []
+    for x in (h.get("alt") if isinstance(h.get("alt"), list) else [])[:6]:
+        n = _norm_hwid(x)
+        if n and n != _norm_hwid(h.get("hw")) and n not in alts:
+            alts.append(n)
+    flask_g.ab_env = {"k": nk, "hw": _norm_hwid(h.get("hw")), "alts": tuple(alts[:4]), "fresh": bool(h.get("fresh")), "b": body}
+    fn = _AB_OPS.get(op)
+    if fn is None:
+        status, payload = 404, {"ok": False, "loi": "not found"}
+    else:
+        try:
+            resp = fn()
+            status, payload = resp.status_code, json.loads(resp.get_data(as_text=True))
+        except HTTPException_:
+            status, payload = 404, {"ok": False, "loi": "not found"}
+        except Exception as ex:  # noqa: BLE001
+            _err500(ex, "autocuoc:" + op)
+            status, payload = 500, {"ok": False, "loi": "loi may chu"}
+    if isinstance(payload, dict):
+        payload["_t"] = int(time.time())                 # giờ server: client tự bù lệch đồng hồ máy (chống bị loại vì lệch > 300s)
+    out = json.dumps({"s": status, "j": payload}, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    n2 = secrets.token_bytes(16)
+    ek2, mk2 = _ab_ek_mk(nk, n2)
+    c2 = _ab_xor_ks(ek2, out)
+    t2 = hmac.new(mk2, b"r|" + nonce + n2 + c2, hashlib.sha256).digest()[:16]
+    r = Response(json.dumps({"n": _ab_b64e(n2), "c": _ab_b64e(c2), "m": _ab_b64e(t2)}, separators=(",", ":")), content_type="application/json")
+    r.headers["Cache-Control"] = "no-store"
+    return r
 
 
 def _ab_feed_view(table="lcmd5"):
@@ -8699,6 +9038,12 @@ def _ab_get(sid):
 @app.route("/autocuoc")
 def tool_autocuoc():
     """Chỉ trả MÀN NHẬP KEY (không chứa giao diện auto cược). Nhập đúng key -> trình duyệt gọi /tool/autocuoc/ui kèm key để nhận giao diện."""
+    if not AB_SERVE_UI:                                  # giao diện đã tách ra file autocuoc.html (host riêng) -> chuyển hướng sang AUTOBET_UI_URL
+        if AB_UI_URL:
+            resp = redirect(AB_UI_URL, 302)
+            resp.headers["Cache-Control"] = "no-store"
+            return resp
+        abort(404)
     resp = Response(AB_SHELL.replace("/*__HWID_JS__*/", HWID_JS), content_type="text/html; charset=utf-8")
     resp.headers["Cache-Control"] = "no-store"
     resp.headers["X-Robots-Tag"] = "noindex, nofollow"
@@ -8708,6 +9053,8 @@ def tool_autocuoc():
 @app.route("/tool/autocuoc/ui")
 def tool_autocuoc_ui():
     """Giao diện auto cược (css + html + js) — CHỈ trả khi key AUTO CƯỢC LC hợp lệ (header X-User-Key + X-HWID)."""
+    if not AB_SERVE_UI:
+        abort(404)
     g = _ab_gate()
     if g is not None:
         return g
@@ -8757,7 +9104,7 @@ def tool_autocuoc_state():
         for s0 in [s for s in _ab_sessions.values() if s.owner == own]:
             _ab_ensure_pair(s0)                                             # mỗi tài khoản luôn có đủ 2 bàn (MD5 + Hũ)
     groups = _ab_groups(own)
-    want = request.args.get("id", "")
+    want = _ab_arg("id")
     sel = next((g2 for g2 in groups if any(x.sid == want for x in g2)), None)
     if sel is None and groups:
         sel = next((g2 for g2 in groups if any(x.alive for x in g2)), groups[0])
@@ -8766,7 +9113,7 @@ def tool_autocuoc_state():
                   "tables": {t: {"label": AB_TABLES[t]["label"], "short": AB_TABLES[t]["short"]} for t in AB_TABLE_KEYS},
                   "accounts": [_ab_acc_view(g2) for g2 in groups],
                   "selected": _ab_acc_view(sel, full=True) if sel else None,
-                  "luu_mk": AB_SAVE_PW, "multi": AB_MULTI,
+                  "luu_mk": AB_SAVE_PW, "multi": ab_mult("lcmd5"), "multi_by": {t: ab_mult(t) for t in AB_TABLE_KEYS},
                   "wd_limits": {"momo": [AB_MOMO_MIN, AB_MOMO_MAX], "bank": [AB_BANK_MIN, AB_BANK_MAX]}})
 
 
@@ -8775,7 +9122,7 @@ def tool_autocuoc_login():
     g = _ab_gate()
     if g is not None:
         return g
-    b = request.get_json(silent=True) or {}
+    b = _ab_body()
     u, p = str(b.get("username") or "").strip()[:60], str(b.get("password") or "")[:120]
     if not u or not p:
         return _json({"ok": False, "loi": "Nhập tên đăng nhập và mật khẩu LC79"}, 400)
@@ -8822,7 +9169,7 @@ def tool_autocuoc_start():
     g = _ab_gate()
     if g is not None:
         return g
-    b = request.get_json(silent=True) or {}
+    b = _ab_body()
     s = _ab_get(b.get("id"))
     if s is None:
         return _json({"ok": False, "loi": "Không thấy tài khoản — đăng nhập lại"}, 404)
@@ -8844,6 +9191,10 @@ def tool_autocuoc_start():
         s.wd_count, s.logs, s.open, s.last_phien = 0, [], None, 0
     else:                                                    # chạy TIẾP lịch sử cũ
         s.ledger.balance = real
+    s._unrec.clear()
+    for x in _ab_siblings(s):                                # ví CHUNG 2 bàn: bàn kia cũng nhận số dư thật (bàn đang chạy thì để nó tự đối soát)
+        if not x.alive:
+            x.ledger.balance = real
     s.cfg = cfg
     for x, nc in others:                                     # mục tiêu lãi + tự rút dùng chung: bàn kia nhận luôn
         x.apply_cfg(nc)
@@ -8861,7 +9212,7 @@ def tool_autocuoc_config():
     g = _ab_gate()
     if g is not None:
         return g
-    b = request.get_json(silent=True) or {}
+    b = _ab_body()
     s = _ab_get(b.get("id"))
     if s is None:
         return _json({"ok": False, "loi": "Không thấy tài khoản"}, 404)
@@ -8881,7 +9232,7 @@ def tool_autocuoc_action():
     g = _ab_gate()
     if g is not None:
         return g
-    b = request.get_json(silent=True) or {}
+    b = _ab_body()
     s = _ab_get(b.get("id"))
     if s is None:
         return _json({"ok": False, "loi": "Không thấy tài khoản"}, 404)
@@ -8927,7 +9278,7 @@ def tool_autocuoc_wallets():
     g = _ab_gate()
     if g is not None:
         return g
-    b = request.get_json(silent=True) or {}
+    b = _ab_body()
     s = _ab_get(b.get("id"))
     if s is None:
         return _json({"ok": False, "loi": "Không thấy tài khoản"}, 404)
@@ -8937,6 +9288,10 @@ def tool_autocuoc_wallets():
                                            "name": str(w.get("wallet_name") or "")} for w in ws]})
 
 
+
+
+_AB_OPS = {"ping": _ab_op_ping, "state": tool_autocuoc_state, "login": tool_autocuoc_login, "start": tool_autocuoc_start,
+           "config": tool_autocuoc_config, "action": tool_autocuoc_action, "wallets": tool_autocuoc_wallets}
 
 
 def _ab_mask(s, keep=4):
@@ -9812,7 +10167,7 @@ AB_UI = _ab_split_ui()
 
 @app.route("/")
 def index():
-    return _json({"ok": True, "api": "SUNVIW"})          # cố ý KHÔNG liệt kê endpoint (/api/html, /api/admin ...)
+    abort(404)                                           # gốc không lộ gì (healthcheck dùng /health)
 
 
 def _sec_report():
@@ -9827,6 +10182,10 @@ def _sec_report():
         w.append("LC_MD5_API_URL / LC_HU_API_URL chua dat -> URL (kem token at=) dang nam trong code")
     if not os.environ.get("AUTOBET_AT_TOKENS"):
         w.append("AUTOBET_AT_TOKENS chua dat -> token at dang nam trong code")
+    if not AB_SERVE_UI and not AB_ALLOWED_ORIGINS:
+        w.append("AUTOBET_SERVE_UI=0 nhung AUTOBET_UI_URL va AUTOBET_ALLOWED_ORIGINS deu trong -> file autocuoc.html KHONG goi duoc API (dat AUTOBET_UI_URL hoac AUTOBET_ALLOWED_ORIGINS=https://panel-cua-ban)")
+    if "*" in AB_ALLOWED_ORIGINS:
+        w.append("AUTOBET_ALLOWED_ORIGINS=* -> moi trang web deu goi cheo duoc API auto cuoc (van can key + HWID) · nen ghi dung origin cua panel")
     if IP_TRUST_PROXY and not IP_HEADER:
         w.append(f"IP client lay tu X-Forwarded-For, phan tu thu {IP_PROXY_HOPS} tinh tu cuoi (SUNVIW_PROXY_HOPS). Neu nhieu nguoi bi tinh CHUNG 1 IP (khoa nham) thi tang SUNVIW_PROXY_HOPS hoac dat SUNVIW_IP_HEADER")
     if not DEV_TOKEN_STRICT:
@@ -10056,7 +10415,7 @@ def main():
     _off = offsrv_state()["off_list"]
     print(f"OFF SERVER  ->  {('DANG OFF: ' + ', '.join(_off) + ' (tool ngoai khong nhan duoc du doan cua cac ban nay, chi panel / admin nhan)') if _off else 'khong ban nao off'} · bat / tat TUNG BAN o tab 'Off server' trang /api/admin (chi admin chinh) · file {OFFSRV_PATH}")
     print(f"PANEL HTML  ->  thiet bi phai duoc admin chinh duyet (khong can key, vao ca Sun + Hit) · file {PANEL_DEV_PATH} · toi da {PANEL_MAX_PENDING_PER_IP} yeu cau cho duyet / IP")
-    print(f"AUTO CUOC   ->  {'BAT' if AB_ENABLED else 'TAT'} · http://{a.host}:{a.port}/tool/autocuoc · nguon du doan {' + '.join(AB_TABLE_KEYS)} · luu mat khau {'CO (AUTOBET_SAVE_PW=1)' if AB_SAVE_PW else 'KHONG (chi RAM)'} · file {AB_PATH}")
+    print(f"AUTO CUOC   ->  {'BAT' if AB_ENABLED else 'TAT'} · {AB_UI_URL if (AB_UI_URL and not AB_SERVE_UI) else f'http://{a.host}:{a.port}/tool/autocuoc'} · nguon du doan {' + '.join(AB_TABLE_KEYS)} · luu mat khau {'CO (AUTOBET_SAVE_PW=1)' if AB_SAVE_PW else 'KHONG (chi RAM)'} · file {AB_PATH}")
     print(f"WR 100 phien ->  luu toi da {PERSIST_KEEP} van da cham · WR dung/sai xet {EVAL_WINDOW} van gan nhat")
     print(f"WR          ->  xet {WR_WINDOW} van gan nhat, trong so cao nhat x{WR_WEIGHT_NEWEST}, flip trong so {'BAT (cu nhat nang nhat)' if WR_FLIP_WEIGHT else 'TAT (moi nhat nang nhat)'}, trong so (cu -> moi): "
           + " · ".join(f"{w:.2f}" for w in wr_weights_full()))
