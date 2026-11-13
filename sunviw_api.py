@@ -24,7 +24,7 @@ Endpoint:
     ...?hist=N                   -> (mọi game) thêm lich_su: N ván đúng/sai gần nhất, mới -> cũ
     GET /api/predictlcmd5        -> [LC MD5] JSON dự đoán (game="lc79", ban="lcmd5"; tên cũ Tele68 MD5 — /api/predicttele68txmd5 vẫn chạy như alias); nguồn trả CẢ DANH SÁCH ~105 phiên, tool chỉ lưu thêm phiên chưa có, dự đoán phiên mới nhất + 1 và giữ tới khi API trả kết quả phiên đó (xem khối "CONFIG LC")
     GET /api/predictlchu         -> [LC HŨ] JSON dự đoán (game="lc79", ban="lchu"); nguồn https://wtx.tele68.com/v1/tx/sessions (cùng định dạng list với LC MD5), config + data RIÊNG (khối "CONFIG LC"). Key game LC79 dùng được cả 2 bàn LC
-    GET /tool/autocuoc           -> (chuyển hướng 302 sang https://autocuoclc79.netlify.app/ — đổi bằng AUTOBET_UI_URL) [AUTO CƯỢC LC79 · 1 TÀI KHOẢN = 1 TAB, 2 BÀN MD5 + HŨ: luật cược riêng từng bàn, mục tiêu lãi + tự rút DÙNG CHUNG] trang web điều khiển auto cược + auto rút (thay bot Telegram): đăng nhập LC79, bật/tắt từng luật (x2 thắng/thua, giảm cược, pause, mục tiêu lãi, tự rút Momo/Ngân hàng), biểu đồ lãi/lỗ. GIAO DIỆN BỊ ẨN: chỉ có ô nhập KEY AUTO CƯỢC LC (game "autolc", tiền tố AUTOLC-, tạo ở /api/admin); nhập đúng key mới nhận được giao diện, và MỖI request /tool/autocuoc/api/* (kể cả nhận dự đoán) đều phải kèm X-User-Key + X-HWID. Mỗi key chỉ thấy tài khoản LC79 của mình; key hết hạn -> phiên auto cược tự dừng. Chạy gunicorn --workers 1 (xem khối "AUTO CƯỢC LC79")
+    GET /tool/autocuoc           -> (chuyển hướng 302 sang https://toolautocuoclc79.netlify.app/ — đổi bằng AUTOBET_UI_URL) [AUTO CƯỢC LC79 · 1 TÀI KHOẢN = 1 TAB, 2 BÀN MD5 + HŨ: luật cược riêng từng bàn, mục tiêu lãi + tự rút DÙNG CHUNG] trang web điều khiển auto cược + auto rút (thay bot Telegram): đăng nhập LC79, bật/tắt từng luật (x2 thắng/thua, giảm cược, pause, mục tiêu lãi, tự rút Momo/Ngân hàng), biểu đồ lãi/lỗ. GIAO DIỆN BỊ ẨN: chỉ có ô nhập KEY AUTO CƯỢC LC (game "autolc", tiền tố AUTOLC-, tạo ở /api/admin); nhập đúng key mới nhận được giao diện, và MỖI request /tool/autocuoc/api/* (kể cả nhận dự đoán) đều phải kèm X-User-Key + X-HWID. Mỗi key chỉ thấy tài khoản LC79 của mình; key hết hạn -> phiên auto cược tự dừng. Chạy gunicorn --workers 1 (xem khối "AUTO CƯỢC LC79")
     GET /api/html                -> panel HTML theo dõi Sun + Hit, đổi qua lại, chọn số ván lịch sử. CHỈ MỞ KHI ADMIN CHÍNH DUYỆT THIẾT BỊ (HWID): máy lạ thấy bảng "Đang chờ admin duyệt", được duyệt thì tự mở, KHÔNG cần key, vào cả Sun + Hit
     GET /api/panel/status        -> panel hỏi trạng thái duyệt của thiết bị này (gửi yêu cầu lần đầu): {"status": "approved" | "pending" | "denied" | "limit"} (xem khối "DUYỆT THIẾT BỊ VÀO PANEL")
     GET /api/admin/panel (+ POST /approve · /deny · /remove · /ban · /unban) -> admin CHÍNH xem + duyệt / từ chối / gỡ quyền / BAN (danh sách đen: chặn cả IP + thiết bị khỏi /api/html, trả 404) thiết bị vào panel (mục "Duyệt thiết bị vào panel HTML" ở trang /api/admin)
@@ -4464,12 +4464,12 @@ _NOFRAME_PREFIX = ("/api/admin", "/tool/autocuoc", "/api/autocuoc", "/autocuoc")
 #                                  Chỉ origin trong danh sách mới được gọi chéo /tool/autocuoc/api/* từ trình duyệt; origin khác bị chặn như cũ.
 #   Mọi request vẫn BẮT BUỘC X-User-Key (key autolc) + X-HWID: CORS chỉ quyết định trình duyệt có cho trang khác đọc phản hồi hay không,
 #   KHÔNG thay cho xác thực. Xác thực và gắn thiết bị vẫn nằm hoàn toàn ở server (_ab_gate).
-#   AUTOBET_UI_URL                 LINK GIAO DIỆN AUTO CƯỢC (mặc định https://autocuoclc79.netlify.app/). Khi AUTOBET_SERVE_UI=0, mở /tool/autocuoc
+#   AUTOBET_UI_URL                 LINK GIAO DIỆN AUTO CƯỢC (mặc định https://toolautocuoclc79.netlify.app/). Khi AUTOBET_SERVE_UI=0, mở /tool/autocuoc
 #                                  (và /api/autocuoc, /autocuoc) sẽ tự chuyển hướng sang link này. Origin của link này luôn được tự thêm vào
 #                                  AUTOBET_ALLOWED_ORIGINS để trang đó gọi được API. Đặt AUTOBET_UI_URL="" để tắt chuyển hướng (quay lại trả 404).
 AB_SERVE_UI = _env_bool("AUTOBET_SERVE_UI", False)
 AB_API_PREFIX = "/tool/autocuoc/api/"
-AB_UI_URL = os.environ.get("AUTOBET_UI_URL", "https://autocuoclc79.netlify.app/").strip()
+AB_UI_URL = os.environ.get("AUTOBET_UI_URL", "https://toolautocuoclc79.netlify.app/").strip()
 if AB_UI_URL and not AB_UI_URL.lower().startswith(("http://", "https://")):
     AB_UI_URL = ""                                       # chỉ nhận link http(s) — tránh chuyển hướng tới scheme lạ (javascript:, data:...)
 AB_ALLOWED_ORIGINS = {o.strip().rstrip("/").lower() for o in os.environ.get("AUTOBET_ALLOWED_ORIGINS", "").split(",") if o.strip()}
