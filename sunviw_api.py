@@ -72,6 +72,7 @@ JSON /api/predict:
 🧠 13 LOGIC CỦA SUN (SEQ13v6 · thuần chuỗi Tài/Xỉu + xúc xắc + tổng, KHÔNG dùng MD5, KHÔNG cần numpy):
     Mỗi logic là một thuật toán tự học ONLINE trên lịch sử các phiên đã quét (không dùng MD5, không dùng số phiên). Mỗi ván tính lại từ lịch sử, KHÔNG nhìn trước kết quả.
     ⚑ MỖI LOGIC CÓ CỬA SỔ DỮ LIỆU RIÊNG (LOGIC_WIN · env SUNVIW_WIN_<TÊN>): chỉ đọc đúng số ván GẦN NHẤT mà nó mạnh nhất, mọi ván trong cửa sổ trọng số NHƯ NHAU (không decay).
+    ⚑ GIỚI HẠN SỐ VÁN DATA THEO TỪNG GAME (DATA_WIN · SUN: khối "CONFIG SỐ VÁN DÙNG LÀM DATA" · các bàn: khoá "DATA_WIN" trong khối config của chính bàn đó · env SUNVIW_DATA_WIN hoặc <TIỀN TỐ BÀN>DATA_WIN vd. LCMD5_DATA_WIN): vd. 300 = chỉ dùng 300 ván gần nhất của bàn đó; 0 = không giới hạn (mặc định). Đổi xong bấm "🔄 Tính lại theo config" ở panel để chạy lại logic cho các ván đã lưu.
     ⚑ CẢ 13 LOGIC LUÔN BỎ PHIẾU (không cổng thống kê, không phiếu trắng) — co về 50% khi chuỗi ngẫu nhiên chứ không bịa cấu trúc.
       ── 7 logic giữ lại từ SEQ12v5 ──
         REGIME (250) nhịp đảo cầu: tỉ lệ đảo cầu 20 ván gần nhất chia 4 nhóm; học online P(ván sau ĐẢO | nhóm)
@@ -138,6 +139,7 @@ Server quét upstream nền mỗi POLL_SEC giây, chỉ tính lại khi có phi�
 import argparse
 import atexit
 import base64
+import bisect
 import hashlib
 import hmac
 import ipaddress
@@ -386,6 +388,32 @@ POLL_SEC = 3.0             # chu kỳ quét upstream (giống AUTO_INTERVAL_MS c
 WR_MIN_GAMES = 1           # số ván đã chấm tối thiểu để dùng WR (dưới mức này -> đa số 21 logic)
 
 # ═══════════════════════════════════════════════════════════════════════════
+#  📚  CONFIG SỐ VÁN DÙNG LÀM DATA (DATA_WIN)  —  MỖI BÀN MỘT SỐ RIÊNG, GHI NGAY TRONG KHỐI CONFIG CỦA BÀN
+# ═══════════════════════════════════════════════════════════════════════════
+#   DATA_WIN = 13 logic được đọc TỐI ĐA bao nhiêu ván GẦN NHẤT làm data. Vd. 300 -> chỉ dùng 300 ván gần nhất của bàn đó.
+#       0            = KHÔNG giới hạn (như bản gốc: mỗi logic đọc cửa sổ riêng LOGIC_WIN của nó, tối đa HIST_KEEP ván đang lưu)
+#       N (>= 40)    = mọi logic chỉ thấy N ván gần nhất. Logic nào có cửa sổ riêng LỚN hơn N bị cắt xuống N; logic có cửa sổ riêng NHỎ hơn N giữ nguyên.
+#                      (vd. N = 300: REGIME 250 · KNNH 200 · ESN2 300 giữ nguyên; SPARSE / GBS / CMIXL 500 · AFM / CTW / MATCHR / FTRL 450 · RLS / BLKHAZ / BOCPD 400 bị cắt xuống 300)
+#   Dưới 40 bị nâng lên 40 (các logic cần ~30-40 ván mới đủ bằng chứng). Lớn hơn HIST_KEEP thì cũng chỉ dùng được HIST_KEEP ván đang lưu.
+#   ► Ở ĐÂU: SUN = dòng DATA_WIN ngay bên dưới. Các bàn khác = khoá "DATA_WIN" nằm ngay dưới "HIST_KEEP" trong khối config của CHÍNH bàn đó
+#     (HIT_TXTHUONG_CFG · HIT_TXMD5_CFG · LC_MD5_CFG · LC_HU_CFG · BV_MD5_CFG · BV_HU_CFG · MX_MD5_CFG · MX_HU_CFG) — sửa bàn nào CHỈ ảnh hưởng bàn đó.
+#   ► MẶC ĐỊNH TẤT CẢ = 0 (không giới hạn) -> chạy y hệt bản gốc, chưa đổi gì.
+#   ⚠ Đổi số xong phải bấm nút "🔄 Tính lại theo config" ở panel /api/html: tool chạy lại 13 logic cho các ván đã lưu theo số ván data mới (ván nào đã tính bằng đúng số hiện tại thì bỏ qua -> bấm lần 2 gần như tức thì).
+#   Đổi mà không sửa file (env): SUNVIW_DATA_WIN (SUN) · <TIỀN TỐ BÀN>DATA_WIN cho từng bàn: HITTXTHUONG_ · HITTXMD5_ · LCMD5_ · LCHU_ · BVMD5_ · BVHU_ · MXMD5_ · MXHU_  (vd. LCMD5_DATA_WIN=300)
+
+
+def _norm_data_win(v):
+    """Chuẩn hoá số ván data: 0 / âm / không phải số = KHÔNG giới hạn · còn lại tối thiểu 40."""
+    try:
+        v = int(v)
+    except (TypeError, ValueError):
+        return 0
+    return 0 if v <= 0 else max(40, v)
+
+
+DATA_WIN = _norm_data_win(_env_num("SUNVIW_DATA_WIN", 0, int))   # ◄◄ SUN: số ván gần nhất dùng làm data (0 = không giới hạn · vd. 300) — cfg.DATA_WIN của SUN đọc biến này
+
+# ═══════════════════════════════════════════════════════════════════════════
 #  ⚙  CONFIG WR CÓ TRỌNG SỐ (KIỂU "PHẢN ỨNG NHANH + SÀN NHỚ CẦU CŨ")  —  CHỈNH Ở ĐÂY
 # ═══════════════════════════════════════════════════════════════════════════
 #   Ván MỚI NHẤT có trọng số = WR_WEIGHT_NEWEST (cao nhất). Ván càng cũ trọng số càng giảm theo hàm mũ NHƯNG không bao giờ
@@ -490,6 +518,7 @@ class TableCfg:
         self.__dict__.setdefault("AF_SWITCH_NEED", 6)           # số phiếu để đổi sang chế độ khác (6/13)
         self.__dict__.setdefault("AF_SWITCH_PRIO", True)        # 2 chế độ còn lại cùng đủ phiếu -> ưu tiên theo chế độ ván trước (ALL->CAO · CAO->ALL · THẤP->CAO)
         self.__dict__.setdefault("AF_SWITCH_LEAD", False)       # True = chế độ mới còn phải dẫn đầu duy nhất mới đổi (êm hơn) · False = chỉ cần đủ AF_SWITCH_NEED phiếu
+        self.__dict__.setdefault("DATA_WIN", 0)                 # số ván gần nhất dùng làm data cho 13 logic (0 = không giới hạn · xem khối CONFIG SỐ VÁN DÙNG LÀM DATA)
         self.normalize()
 
     def normalize(self):
@@ -509,6 +538,7 @@ class TableCfg:
         self.PERSIST_KEEP = max(100, self.EVAL_WINDOW, int(self.PERSIST_KEEP))
         self.REBUILD_MAX = self.PERSIST_KEEP
         self.HIST_KEEP = max(50, int(self.HIST_KEEP))
+        self.DATA_WIN = _norm_data_win(self.DATA_WIN)
         self.POLL_SEC = max(1.0, float(self.POLL_SEC))
         self.W_DECAY, self.W_FLOOR, self.W_NEWEST = (Fraction(str(self.WR_DECAY)), Fraction(str(self.WR_FLOOR)), Fraction(str(self.WR_WEIGHT_NEWEST)))
 
@@ -582,6 +612,7 @@ HIT_TXTHUONG_CFG = TableCfg("hittxthuong", _hit_env("HITTXTHUONG_", {
     "GID": "vgmn_100",
     "POLL_SEC": 3.0,
     "HIST_KEEP": HIST_KEEP,
+    "DATA_WIN": 0,   # ◄◄ số ván gần nhất dùng làm data của RIÊNG bàn này (0 = không giới hạn · vd. 300 · tối thiểu 40) — đổi xong bấm "Tính lại theo config" ở panel
     "TIE_LOGIC": "AFM",
     "CONSEC_CHECK": True,
     # WR có trọng số
@@ -609,6 +640,7 @@ HIT_TXMD5_CFG = TableCfg("hittxmd5", _hit_env("HITTXMD5_", {
     "GID": "vgmn_101",
     "POLL_SEC": 3.0,
     "HIST_KEEP": HIST_KEEP,
+    "DATA_WIN": 0,   # ◄◄ số ván gần nhất dùng làm data của RIÊNG bàn này (0 = không giới hạn · vd. 300 · tối thiểu 40) — đổi xong bấm "Tính lại theo config" ở panel
     "TIE_LOGIC": "AFM",
     "CONSEC_CHECK": True,
     # WR có trọng số
@@ -666,10 +698,11 @@ LC_MD5_CFG = TableCfg("lcmd5", _hit_env("LCMD5_", _hit_env("TELE68TXMD5_", {
     "GID": "lc_md5",
     "POLL_SEC": 3.0,
     "HIST_KEEP": HIST_KEEP,
+    "DATA_WIN": 250,   # ◄◄ số ván gần nhất dùng làm data của RIÊNG bàn này (0 = không giới hạn · vd. 300 · tối thiểu 40) — đổi xong bấm "Tính lại theo config" ở panel
     "TIE_LOGIC": "AFM",
     "CONSEC_CHECK": True,
     # WR có trọng số
-    "WR_WINDOW": 13, "WR_DECAY": 0.95, "WR_FLOOR": 1.0, "WR_WEIGHT_NEWEST": 1.0, "WR_FLIP_WEIGHT": False, "WR_MIN_GAMES": 1,
+    "WR_WINDOW": 8, "WR_DECAY": 0.95, "WR_FLOOR": 1.0, "WR_WEIGHT_NEWEST": 1.0, "WR_FLIP_WEIGHT": False, "WR_MIN_GAMES": 1,
     # bẻ final (dùng khi AF tắt)
     "FLIP_FINAL": False,
     # AF: bước 1 bẻ logic
@@ -682,7 +715,7 @@ LC_MD5_CFG = TableCfg("lcmd5", _hit_env("LCMD5_", _hit_env("TELE68TXMD5_", {
     # AF: bước 3 bẻ theo WR chế độ (WR chế độ < AF_MODE_BELOW % -> đảo final TÀI<->XỈU)
     "AF_MODE_FLIP": False, "AF_MODE_WINDOW": 9, "AF_MODE_MIN": 7, "AF_MODE_BELOW": 45,
     # AF: bẻ final riêng
-    "AF_FLIP_FINAL": False, "AF_FLIP_FINAL_CT": False, "AF_FLIP_FINAL_CAO": True, "AF_FLIP_FINAL_THAP": False, "AF_FLIP_FINAL_ALL": False,   # bộ backtest 300 ván (ALL cao nhất + ALL nhiều ván nhất): KHÔNG bẻ final chế độ nào
+    "AF_FLIP_FINAL": False, "AF_FLIP_FINAL_CT": False, "AF_FLIP_FINAL_CAO": True, "AF_FLIP_FINAL_THAP": False, "AF_FLIP_FINAL_ALL": True,   # bộ backtest 300 ván (ALL cao nhất + ALL nhiều ván nhất): KHÔNG bẻ final chế độ nào
     # đánh giá đúng/sai + số ván lưu
     "EVAL_WINDOW": 500, "PERSIST_KEEP": 300,
 })))
@@ -693,6 +726,7 @@ LC_HU_CFG = TableCfg("lchu", _hit_env("LCHU_", {
     "GID": "lc_hu",
     "POLL_SEC": 3.0,
     "HIST_KEEP": HIST_KEEP,
+    "DATA_WIN": 0,   # ◄◄ số ván gần nhất dùng làm data của RIÊNG bàn này (0 = không giới hạn · vd. 300 · tối thiểu 40) — đổi xong bấm "Tính lại theo config" ở panel
     "TIE_LOGIC": "AFM",
     "CONSEC_CHECK": True,
     # WR có trọng số
@@ -742,6 +776,7 @@ BV_MD5_CFG = TableCfg("betvipmd5", _hit_env("BVMD5_", {
     "GID": "bv_md5",
     "POLL_SEC": 3.0,
     "HIST_KEEP": HIST_KEEP,
+    "DATA_WIN": 0,   # ◄◄ số ván gần nhất dùng làm data của RIÊNG bàn này (0 = không giới hạn · vd. 300 · tối thiểu 40) — đổi xong bấm "Tính lại theo config" ở panel
     "TIE_LOGIC": "AFM",
     "CONSEC_CHECK": True,
     # WR có trọng số
@@ -769,6 +804,7 @@ BV_HU_CFG = TableCfg("betviphu", _hit_env("BVHU_", {
     "GID": "bv_hu",
     "POLL_SEC": 3.0,
     "HIST_KEEP": HIST_KEEP,
+    "DATA_WIN": 0,   # ◄◄ số ván gần nhất dùng làm data của RIÊNG bàn này (0 = không giới hạn · vd. 300 · tối thiểu 40) — đổi xong bấm "Tính lại theo config" ở panel
     "TIE_LOGIC": "AFM",
     "CONSEC_CHECK": True,
     # WR có trọng số
@@ -822,6 +858,7 @@ MX_MD5_CFG = TableCfg("max789md5", _hit_env("MXMD5_", {
     "GID": "mx_md5",
     "POLL_SEC": 3.0,
     "HIST_KEEP": HIST_KEEP,
+    "DATA_WIN": 0,   # ◄◄ số ván gần nhất dùng làm data của RIÊNG bàn này (0 = không giới hạn · vd. 300 · tối thiểu 40) — đổi xong bấm "Tính lại theo config" ở panel
     "TIE_LOGIC": "AFM",
     "CONSEC_CHECK": True,
     # WR có trọng số
@@ -838,7 +875,7 @@ MX_MD5_CFG = TableCfg("max789md5", _hit_env("MXMD5_", {
     # AF: bước 3 bẻ theo WR chế độ (WR chế độ < AF_MODE_BELOW % -> đảo final TÀI<->XỈU)
     "AF_MODE_FLIP": False, "AF_MODE_WINDOW": 9, "AF_MODE_MIN": 7, "AF_MODE_BELOW": 45,
     # AF: bẻ final riêng
-    "AF_FLIP_FINAL": False, "AF_FLIP_FINAL_CT": False, "AF_FLIP_FINAL_CAO": True, "AF_FLIP_FINAL_THAP": False, "AF_FLIP_FINAL_ALL": True,
+    "AF_FLIP_FINAL": False, "AF_FLIP_FINAL_CT": False, "AF_FLIP_FINAL_CAO": False, "AF_FLIP_FINAL_THAP": True, "AF_FLIP_FINAL_ALL": True,
     # đánh giá đúng/sai + số ván lưu
     "EVAL_WINDOW": 500, "PERSIST_KEEP": 300,
 }))
@@ -849,6 +886,7 @@ MX_HU_CFG = TableCfg("max789hu", _hit_env("MXHU_", {
     "GID": "mx_hu",
     "POLL_SEC": 3.0,
     "HIST_KEEP": HIST_KEEP,
+    "DATA_WIN": 0,   # ◄◄ số ván gần nhất dùng làm data của RIÊNG bàn này (0 = không giới hạn · vd. 300 · tối thiểu 40) — đổi xong bấm "Tính lại theo config" ở panel
     "TIE_LOGIC": "AFM",
     "CONSEC_CHECK": True,
     # WR có trọng số
@@ -928,10 +966,13 @@ def vote_result(preds):
     return TAI if tai > xiu else XIU
 
 
-def compute_all(hist):
+def compute_all(hist, cap=0):
     """Vote của 13 logic SUN (SEQ13v6) cho phiên KẾ TIẾP, từ lịch sử `hist` (cũ -> mới; mỗi phần tử có actual / total / d1 d2 d3 / phien). Thứ tự = SUN_NAMES.
     MỖI LOGIC CHỈ ĐỌC LOGIC_WIN[tên] VÁN GẦN NHẤT (cửa sổ mạnh nhất của logic đó, mọi ván trọng số như nhau). Cả 13 logic LUÔN bỏ phiếu (không cổng, không phiếu trắng):
-    chưa đủ lịch sử cho một logic (hoặc logic lỗi) -> logic đó tạm theo kết quả ván trước."""
+    chưa đủ lịch sử cho một logic (hoặc logic lỗi) -> logic đó tạm theo kết quả ván trước.
+    cap = DATA_WIN của game (xem khối CONFIG SỐ VÁN DÙNG LÀM DATA): > 0 -> chỉ giữ `cap` ván GẦN NHẤT làm data cho mọi logic (cửa sổ riêng của logic vẫn áp trong đó, logic nào lớn hơn cap thì bị cắt xuống cap); 0 -> không giới hạn."""
+    if cap and len(hist) > cap:
+        hist = hist[-cap:]
     S = {"y": [1 if r["actual"] == TAI else 0 for r in hist], "t": [int(r["total"]) for r in hist],
          "d": [(r["d1"], r["d2"], r["d3"]) for r in hist],
          "p": [int(r["phien"]) for r in hist]}              # số phiên
@@ -2924,36 +2965,59 @@ def rebuild_graded(hist, saved_graded=None, cfg=SUN):
             continue
         if not (nxt["phien"] > newest or (backfill and nxt["phien"] < oldest)):    # chỉ ván MỚI hơn ván đã lưu, hoặc (khi chấm bù) ván CŨ hơn ván cũ nhất đã lưu
             continue
-        votes = compute_all(hist[:i + 1])
+        votes = compute_all(hist[:i + 1], cfg.DATA_WIN)
         # Chỉ dùng các ván đã chấm TRƯỚC phiên nxt (seed có thể chứa ván mới hơn -> nhìn trước đáp án, làm lệch đánh giá)
         combined = [g for g in merge_graded(seed, fresh) if g["session"] < nxt["phien"]]
         final, af = decide_final(votes, combined, None, cfg)                          # AF -> cách cũ
         entry = {"session": nxt["phien"], "total": nxt["total"], "actual": nxt["actual"],
                  "votes": votes, "final": final, "ok": final == nxt["actual"],
-                 "sig": SUN_SIG}
+                 "sig": SUN_SIG, "dw": cfg.DATA_WIN}                              # dw = số ván data lúc tính 13 vote (để nút "Tính lại" biết ván nào cần chạy lại logic)
         if af is not None:                                                # lưu dữ liệu 3 chế độ: vote gốc của nhóm CAO (hv) · nhóm THẤP (lv) · pool ALL (av) của ván này
             entry.update(af=True, mode=af["mode"], mflip=af["mflip"], hv=af["hv"], lv=af["lv"], av=af["av"])
         fresh.append(entry)
     return merge_graded(seed, fresh)
 
 
-def regrade_graded(graded, cfg=SUN):
+def regrade_graded(graded, cfg=SUN, hist=None, stats=None):
     """CHẤM LẠI toàn bộ các ván đã lưu theo CONFIG HIỆN TẠI (ngưỡng AF · vùng bẻ · bẻ final · WR_*...).
-    Dùng lại `votes` (13 logic) đã lưu trong từng ván -> KHÔNG chạy lại compute_all nên rất nhanh (vài trăm ms thay vì phải đợi ván mới chạy tới).
+    Mặc định dùng lại `votes` (13 logic) đã lưu trong từng ván -> nhanh (vài trăm ms).
+    NGOẠI LỆ: nếu truyền `hist` (lịch sử đã lưu, cũ -> mới) và ván nào được tính bằng SỐ VÁN DATA khác hiện tại (entry["dw"] != cfg.DATA_WIN; ván cũ chưa có dw = 0)
+    thì CHẠY LẠI 13 logic cho ván đó từ lịch sử tới ván liền trước (cắt theo cfg.DATA_WIN) rồi mới chốt lại final. Ván đã tính đúng số ván data hiện tại thì bỏ qua -> bấm lần 2 gần như tức thì.
+    stats (dict, tuỳ chọn) nhận: votes = số ván đã chạy lại logic · bo_qua = số ván cần chạy lại nhưng lịch sử không còn đủ (giữ vote cũ).
     Đi từ ván cũ -> mới: ván k được chốt bằng WR của các ván đã chấm lại TRƯỚC nó (y hệt lúc chạy live, không nhìn trước đáp án).
-    Giữ nguyên phiên · tổng · kết quả thật · votes; chỉ tính lại final / ok / af / mode / mflip / hv / lv / av. Ván không có votes thì giữ nguyên."""
+    Giữ nguyên phiên · tổng · kết quả thật; tính lại final / ok / af / mode / mflip / hv / lv / av (+ votes / dw khi chạy lại logic). Ván không có votes thì giữ nguyên."""
+    cap = cfg.DATA_WIN
+    phs = [r["phien"] for r in hist] if hist else []
+    redo = skipped = 0
     out = []
     for g in graded:
         votes = g.get("votes")
         if not isinstance(votes, list) or not votes or g.get("actual") not in (TAI, XIU):
             out.append(g)
             continue
+        redone = False
+        if hist and int(g.get("dw") or 0) != cap:
+            pos = bisect.bisect_left(phs, g["session"]) - 1          # vị trí ván liền TRƯỚC phiên g (đúng đầu vào lúc dự đoán phiên g)
+            if pos >= 0:
+                try:
+                    votes = compute_all(hist[:pos + 1], cap)
+                    redone = True
+                    redo += 1
+                except Exception:  # noqa: BLE001 - 1 ván lỗi không làm hỏng cả lượt tính lại
+                    votes = g["votes"]
+                    skipped += 1
+            else:
+                skipped += 1
         final, af = decide_final(votes, out, None, cfg)
         e = {k: v for k, v in g.items() if k not in ("af", "mode", "mflip", "hv", "lv", "av")}
         e.update(final=final, ok=final == g["actual"])
+        if redone:
+            e.update(votes=votes, dw=cap)
         if af is not None:
             e.update(af=True, mode=af["mode"], mflip=af["mflip"], hv=af["hv"], lv=af["lv"], av=af["av"])
         out.append(e)
+    if stats is not None:
+        stats.update(votes=redo, bo_qua=skipped)
     return out
 
 
@@ -2971,10 +3035,12 @@ def sun_regrade():
         saved = persist_load()
         if not saved:
             return {"so_van": 0, "doi_du_doan": 0, "truoc": {"dung": 0, "tong": 0}, "sau": {"dung": 0, "tong": 0}}
-        new = regrade_graded(saved, SUN)
-        rep = _regrade_report(saved, new, SUN)
-        persist_save(new)
         hist = [_hist_store[k] for k in sorted(_hist_store)]
+        st = {}
+        new = regrade_graded(saved, SUN, hist, st)                   # số ván data đổi -> chạy lại 13 logic cho các ván cũ
+        rep = _regrade_report(saved, new, SUN)
+        rep.update(tinh_lai_logic=st.get("votes", 0), bo_qua_logic=st.get("bo_qua", 0), van_data=SUN.DATA_WIN)
+        persist_save(new)
         if hist:
             res = build_result(hist)                      # dựng lại dự đoán + lich_su từ graded đã chấm lại (không có ván mới nên rất nhanh)
             with _state_lock:
@@ -2990,7 +3056,7 @@ def build_result(hist, cfg=SUN, persist=None):
     saved = load()
     graded = rebuild_graded(hist, saved_graded=saved, cfg=cfg)
     save(graded)
-    votes = compute_all(hist)
+    votes = compute_all(hist, cfg.DATA_WIN)
     dec = _wr_decision_cfg(votes, graded, cfg)                                   # cách chốt cũ: luôn tính (phương án dự phòng + hiển thị WR cũ)
     final, af = decide_final(votes, graded, dec, cfg)                       # AF -> cách cũ
     used_af = af is not None
@@ -3367,9 +3433,11 @@ class HitTable:
             if not self.graded:
                 return {"so_van": 0, "doi_du_doan": 0, "truoc": {"dung": 0, "tong": 0}, "sau": {"dung": 0, "tong": 0}}
             before = list(self.graded)
-            self.graded = regrade_graded(before, self.cfg)[-self.cfg.PERSIST_KEEP:]
-            rep = _regrade_report(before, self.graded, self.cfg)
             hist = [self.hist[k] for k in sorted(self.hist)]
+            st = {}
+            self.graded = regrade_graded(before, self.cfg, hist, st)[-self.cfg.PERSIST_KEEP:]   # số ván data đổi -> chạy lại 13 logic cho các ván cũ
+            rep = _regrade_report(before, self.graded, self.cfg)
+            rep.update(tinh_lai_logic=st.get("votes", 0), bo_qua_logic=st.get("bo_qua", 0), van_data=self.cfg.DATA_WIN)
             if hist:
                 res = build_result(hist, self.cfg, (self._graded_load, self._graded_save))
                 self.pending = {"phien": res["base"]["phien"], "du_doan": res["base"]["du_doan"]}
@@ -4438,13 +4506,13 @@ async function act(kind){
       const da=r.j.da_xoa||{};
       fin('Đã xóa lịch sử '+who+'.',Object.keys(da).map(k=>`<b>${nm(k)}</b>: ẩn ${esc(da[k])} ván`));
     }else if(kind==='regrade'){
-      if(!await ask({title:'Tính lại đúng/sai của '+who+'?',body:'Lịch sử vẫn được giữ nguyên. Tool chấm lại toàn bộ ván đã lưu bằng ngưỡng / bẻ / WR đang chạy (chỉ vài giây), không cần đợi ván mới.',ok:'Tính lại'}))return;
-      const r=await run('/api/history/regrade',{game:gg},90000);
+      if(!await ask({title:'Tính lại đúng/sai của '+who+'?',body:'Lịch sử vẫn được giữ nguyên. Tool chấm lại toàn bộ ván đã lưu bằng ngưỡng / bẻ / WR / số ván data đang chạy, không cần đợi ván mới. Nếu vừa đổi số ván data thì tool chạy lại 13 logic cho các ván đã lưu nên có thể mất vài chục giây — đợi đến khi báo xong.',ok:'Tính lại'}))return;
+      const r=await run('/api/history/regrade',{game:gg},240000);
       if(!r.j||r.j.ok===false){bad(r,'Không tính lại được');return}
       const kq=r.j.ket_qua||{},ks=Object.keys(kq);
       fin('Đã chấm lại theo config hiện tại.',ks.map(k=>{const x=kq[k]||{};
         if(!x.truoc||!x.sau)return `<b>${nm(k)}</b>: xong`;
-        return `<b>${nm(k)}</b>: ${esc(x.so_van)} ván · đổi dự đoán ${esc(x.doi_du_doan)} · đúng/sai ${esc(x.truoc.dung)}/${esc(x.truoc.tong)} → ${esc(x.sau.dung)}/${esc(x.sau.tong)}`}));
+        return `<b>${nm(k)}</b>: ${esc(x.so_van)} ván · đổi dự đoán ${esc(x.doi_du_doan)} · đúng/sai ${esc(x.truoc.dung)}/${esc(x.truoc.tong)} → ${esc(x.sau.dung)}/${esc(x.sau.tong)}`+(x.tinh_lai_logic?` · chạy lại logic ${esc(x.tinh_lai_logic)} ván (data ${x.van_data?esc(x.van_data)+' ván':'không giới hạn'})`:'')}));
     }else if(kind==='wipe'){
       if(!await ask({title:'XÓA SẠCH DATA '+who+'?',body:'Xóa thật toàn bộ lịch sử xúc xắc + các ván đã chấm của '+(all?'cả 7 bàn':'bàn này')+'. WR / AF / dự đoán sẽ bắt đầu lại từ đầu.\nKHÔNG hoàn tác được.',ok:'Xóa vĩnh viễn',danger:true,type:'XOA'}))return;
       const r=await run('/api/history/wipe',{game:gg,confirm:true},60000);
@@ -7444,7 +7512,7 @@ def api_history_clear():
 def api_history_regrade():
     """TÍNH LẠI đúng/sai của TOÀN BỘ ván đã lưu theo CONFIG HIỆN TẠI: {"game": "sun" | "hittxthuong" | "hittxmd5" | "hitclub" | "lcmd5" | "lchu" | "all"}.
     Dùng khi vừa đổi config (ngưỡng AF · bẻ final · WR...) rồi khởi động lại tool: lịch sử vẫn giữ, nhưng đúng/sai được chấm lại bằng config mới ngay,
-    không phải đợi ván mới. Không chạy lại 13 logic (dùng votes đã lưu) nên nhanh. Không đụng mốc \"Xóa lịch sử\".
+    không phải đợi ván mới. Mặc định KHÔNG chạy lại 13 logic (dùng votes đã lưu) nên nhanh; riêng ván nào được tính bằng số ván data (DATA_WIN) khác hiện tại thì chạy lại 13 logic cho ván đó (vài giây tới vài chục giây tuỳ số ván). Không đụng mốc \"Xóa lịch sử\".
     Trả {"ok":true,"ket_qua":{"sun":{"so_van":N,"doi_du_doan":M,"truoc":{"dung","tong"},"sau":{"dung","tong"}}}}."""
     ensure_poller()
     b = request.get_json(silent=True) or {}
@@ -7537,7 +7605,7 @@ def health():
     s.update(ok=s["error"] is None and s["latest"] is not None, upstream=UPSTREAM_URL,
              poll_sec=POLL_SEC, wr_window=WR_WINDOW, be_final=FLIP_FINAL,
              wr_weights=wr_weights_full(), wr_flip=WR_FLIP_WEIGHT, wr_decay=WR_DECAY, wr_floor=WR_FLOOR, wr_newest=WR_WEIGHT_NEWEST,       # trọng số cũ nhất -> mới nhất
-             hist_keep=HIST_KEEP, persist_keep=PERSIST_KEEP, bo_logic=SUN_NAMES,
+             hist_keep=HIST_KEEP, data_win=DATA_WIN, persist_keep=PERSIST_KEEP, bo_logic=SUN_NAMES,
              af=dict(bat=AF_ENABLED, chi_be_vao_nhom=AF_GROUP_FLIPPED_ONLY, can_da_so_nhom=AF_GROUP_NEED_MAJORITY, doi_che_do_de=AF_SWITCH, phieu_doi_che_do=AF_SWITCH_NEED, flip_low=AF_FLIP_LOW, flip_high=AF_FLIP_HIGH, min_games=AF_MIN_GAMES, mode_window=AF_MODE_WINDOW,
                      vung_be=dict(bat=AF_FLIP_BAND, thap=[AF_FLIP_LOW_MIN, AF_FLIP_LOW_MAX], cao=[AF_FLIP_HIGH_MIN, AF_FLIP_HIGH_MAX]),
                      mode_min=AF_MODE_MIN, mode_below=AF_MODE_BELOW, be_che_do=AF_MODE_FLIP, be_final_af=AF_FLIP_FINAL,
@@ -10775,6 +10843,7 @@ def main():
     print(f"OFF SERVER  ->  {('DANG OFF: ' + ', '.join(_off) + ' (tool ngoai khong nhan duoc du doan cua cac ban nay, chi panel / admin nhan)') if _off else 'khong ban nao off'} · bat / tat TUNG BAN o tab 'Off server' trang /api/admin (chi admin chinh) · file {OFFSRV_PATH}")
     print(f"PANEL HTML  ->  thiet bi phai duoc admin chinh duyet (khong can key, vao ca Sun + Hit) · file {PANEL_DEV_PATH} · toi da {PANEL_MAX_PENDING_PER_IP} yeu cau cho duyet / IP")
     print(f"AUTO CUOC   ->  {'BAT' if AB_ENABLED else 'TAT'} · {AB_UI_URL if (AB_UI_URL and not AB_SERVE_UI) else f'http://{a.host}:{a.port}/tool/autocuoc'} · nguon du doan {' + '.join(AB_TABLE_KEYS)} · luu mat khau {'CO (AUTOBET_SAVE_PW=1)' if AB_SAVE_PW else 'KHONG (chi RAM)'} · file {AB_PATH}")
+    print(f"DATA WIN     ->  SUN dung {DATA_WIN or 'khong gioi han'} van gan nhat lam data (cac ban khac: xem dong tung ban ben duoi) · doi xong bam nut 'Tinh lai theo config' o panel")
     print(f"WR 100 phien ->  luu toi da {PERSIST_KEEP} van da cham · WR dung/sai xet {EVAL_WINDOW} van gan nhat")
     print(f"WR          ->  xet {WR_WINDOW} van gan nhat, trong so cao nhat x{WR_WEIGHT_NEWEST}, flip trong so {'BAT (cu nhat nang nhat)' if WR_FLIP_WEIGHT else 'TAT (moi nhat nang nhat)'}, trong so (cu -> moi): "
           + " · ".join(f"{w:.2f}" for w in wr_weights_full()))
@@ -10782,7 +10851,7 @@ def main():
     for _tb in HIT_TABLES.values():
         _c = _tb.cfg
         print(f"HITCLUB {_tb.label:<9} ->  {'BAT' if _tb.active else 'TAT'} · http://{a.host}:{a.port}/api/predict{_tb.key} · gid {_c.GID} · quet moi {_c.POLL_SEC:g}s · file {_tb.path} · "
-              f"AF {'BAT' if _c.AF_ENABLED else 'TAT'} · WR xet {_c.WR_WINDOW} van · be final {'BAT' if _c.FLIP_FINAL else 'TAT'} · config RIENG (khoi CONFIG HITCLUB)")
+              f"data {_c.DATA_WIN or 'khong gioi han'} van · AF {'BAT' if _c.AF_ENABLED else 'TAT'} · WR xet {_c.WR_WINDOW} van · be final {'BAT' if _c.FLIP_FINAL else 'TAT'} · config RIENG (khoi CONFIG HITCLUB)")
     app.run(host=a.host, port=a.port, threaded=True)
 
 
