@@ -26,6 +26,8 @@ Endpoint:
     GET /api/predictlchu         -> [LC HŨ] JSON dự đoán (game="lc79", ban="lchu"); nguồn https://wtx.tele68.com/v1/tx/sessions (cùng định dạng list với LC MD5), config + data RIÊNG (khối "CONFIG LC"). Key game LC79 dùng được cả 2 bàn LC
     GET /api/predictbetvipmd5    -> [BETVIP MD5] JSON dự đoán (game="betvip", ban="betvipmd5"); cùng cấu trúc LC, config + data RIÊNG (khối "CONFIG BETVIP"). Key game BetVip (tiền tố BETVIP-) dùng được cả 2 bàn BetVip; key game khác / key cũ "mọi game" KHÔNG vào được
     GET /api/predictbetviphu     -> [BETVIP HŨ] như trên (ban="betviphu")
+    GET /api/predictmax789md5    -> [MAX789 MD5] JSON dự đoán (game="max789", ban="max789md5"); nguồn trả CẢ DANH SÁCH phiên [{SessionId, FirstDice, SecondDice, ThirdDice, DiceSum, BetSide, CreatedDate}, ...] (phiên ĐẦU = MỚI NHẤT), cùng cơ chế LC / BetVip, config + data RIÊNG (khối "CONFIG MAX789"). Key game Max789 (tiền tố MAX789-) dùng được cả 2 bàn Max789; key game khác / key cũ "mọi game" KHÔNG vào được
+    GET /api/predictmax789hu     -> [MAX789 HŨ] như trên (ban="max789hu")
     GET /tool/autocuoc           -> (chuyển hướng 302 sang https://toolautocuoclc79.netlify.app/ — đổi bằng AUTOBET_UI_URL) [AUTO CƯỢC LC79 · 1 TÀI KHOẢN = 1 TAB, 2 BÀN MD5 + HŨ: luật cược riêng từng bàn, mục tiêu lãi + tự rút DÙNG CHUNG] trang web điều khiển auto cược + auto rút (thay bot Telegram): đăng nhập LC79, bật/tắt từng luật (x2 thắng/thua, giảm cược, pause, mục tiêu lãi, tự rút Momo/Ngân hàng), biểu đồ lãi/lỗ. GIAO DIỆN BỊ ẨN: chỉ có ô nhập KEY AUTO CƯỢC LC (game "autolc", tiền tố AUTOLC-, tạo ở /api/admin); nhập đúng key mới nhận được giao diện, và MỖI request /tool/autocuoc/api/* (kể cả nhận dự đoán) đều phải kèm X-User-Key + X-HWID. Mỗi key chỉ thấy tài khoản LC79 của mình; key hết hạn -> phiên auto cược tự dừng. Chạy gunicorn --workers 1 (xem khối "AUTO CƯỢC LC79")
     GET /api/html                -> panel HTML theo dõi Sun + Hit, đổi qua lại, chọn số ván lịch sử. CHỈ MỞ KHI ADMIN CHÍNH DUYỆT THIẾT BỊ (HWID): máy lạ thấy bảng "Đang chờ admin duyệt", được duyệt thì tự mở, KHÔNG cần key, vào cả Sun + Hit
     GET /api/panel/status        -> panel hỏi trạng thái duyệt của thiết bị này (gửi yêu cầu lần đầu): {"status": "approved" | "pending" | "denied" | "limit"} (xem khối "DUYỆT THIẾT BỊ VÀO PANEL")
@@ -546,6 +548,7 @@ HIST_MAX = 300             # trần số ván lịch sử cho ?hist=N và ô nh�
 HIT_ENABLED = _env_bool("HITCLUB", True)
 HIT_API_URL = os.environ.get("HIT_API_URL", "https://jakpotgwab.geightdors.net/glms/v1/notify/taixiu?platform_id=g8&gid={GID}")
 HIT_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+HIT_FIRST_WAIT = 8.0       # giây: request đầu tiên của 1 bàn CHỜ poller quét xong (không tự quét thêm) — phải < 12s (timeout của panel)
 HIT_TXTHUONG_PATH = os.environ.get("HITTXTHUONG_PATH", _data_path("hit15_txthuong.json"))
 HIT_TXMD5_PATH = os.environ.get("HITTXMD5_PATH", _data_path("hit15_txmd5.json"))
 
@@ -755,7 +758,7 @@ BV_MD5_CFG = TableCfg("betvipmd5", _hit_env("BVMD5_", {
     # AF: bước 3 bẻ theo WR chế độ (WR chế độ < AF_MODE_BELOW % -> đảo final TÀI<->XỈU)
     "AF_MODE_FLIP": False, "AF_MODE_WINDOW": 9, "AF_MODE_MIN": 7, "AF_MODE_BELOW": 45,
     # AF: bẻ final riêng
-    "AF_FLIP_FINAL": False, "AF_FLIP_FINAL_CT": False, "AF_FLIP_FINAL_CAO": True, "AF_FLIP_FINAL_THAP": False, "AF_FLIP_FINAL_ALL": True,
+    "AF_FLIP_FINAL": False, "AF_FLIP_FINAL_CT": False, "AF_FLIP_FINAL_CAO": False, "AF_FLIP_FINAL_THAP": True, "AF_FLIP_FINAL_ALL": False,
     # đánh giá đúng/sai + số ván lưu
     "EVAL_WINDOW": 500, "PERSIST_KEEP": 300,
 }))
@@ -783,6 +786,86 @@ BV_HU_CFG = TableCfg("betviphu", _hit_env("BVHU_", {
     "AF_MODE_FLIP": False, "AF_MODE_WINDOW": 9, "AF_MODE_MIN": 7, "AF_MODE_BELOW": 45,
     # AF: bẻ final riêng
     "AF_FLIP_FINAL": False, "AF_FLIP_FINAL_CT": False, "AF_FLIP_FINAL_CAO": False, "AF_FLIP_FINAL_THAP": True, "AF_FLIP_FINAL_ALL": True,
+    # đánh giá đúng/sai + số ván lưu
+    "EVAL_WINDOW": 500, "PERSIST_KEEP": 300,
+}))
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  🟣  CONFIG MAX789 (GAME 6 · 2 BÀN: MAX789 MD5 + MAX789 HŨ)  —  MỖI BÀN MỘT BỘ CONFIG RIÊNG, DATA RIÊNG  —  CHỈNH Ở ĐÂY
+# ═══════════════════════════════════════════════════════════════════════════
+#   2 bàn (key game "max789", tiền tố MAX789- — 1 key Max789 dùng được CẢ 2 bàn; key game khác KHÔNG dùng được, kể cả key cũ "mọi game"):
+#       MAX789 MD5 · GET /api/predictmax789md5 · file data mx_md5.json · nguồn https://taixiumd5.qjwqwjhdasjb2ju78.com/api/md5luckydice/GetSoiCau?access_token=<TOKEN>
+#       MAX789 HŨ  · GET /api/predictmax789hu  · file data mx_hu.json  · nguồn https://taixiu.qjwqwjhdasjb2ju78.com/api/luckydice/GetSoiCau?access_token=<TOKEN>
+#   Cả 2 nguồn trả CẢ DANH SÁCH (mảng JSON) [{"SessionId", "FirstDice", "SecondDice", "ThirdDice", "DiceSum", "BetSide", "CreatedDate"}, ...] (phiên ĐẦU = MỚI NHẤT).
+#   Khác LC / BetVip ở TÊN TRƯỜNG nên có hàm đọc riêng (_mx_parse); cơ chế bàn dùng lại LcTable (MxTable):
+#       · Mỗi lần quét đọc TOÀN BỘ list, chỉ LƯU THÊM phiên CHƯA có -> tích lũy tối đa HIST_KEEP phiên.
+#       · Dự đoán = phiên MỚI NHẤT + 1 (bộ 13 logic SEQ13v6 + AF + WR, đọc config RIÊNG của bàn ở 2 khối dưới), giữ trong file data (trường "pending") tới khi API trả kết quả phiên đó -> chấm ĐÚNG / SAI.
+#       · Tài/Xỉu tính theo TỔNG 3 xúc xắc (>= 11 = Tài), KHÔNG đọc BetSide / DiceSum của nguồn.
+#   ► 2 khối config bên dưới đang là BẢN SAO config LC MD5 / LC Hũ (chưa backtest riêng cho Max789) — chỉnh riêng khi đã có số liệu. Sửa khối bàn nào CHỈ ảnh hưởng bàn đó.
+#   ► access_token là phiên đăng nhập của tài khoản Max789: HẾT HẠN / bị đăng xuất thì nguồn trả lỗi -> /api/admin/health báo lỗi ở bàn đó. Lấy token mới (mở lại link trên trình duyệt) rồi đặt qua env MX_ACCESS_TOKEN.
+#   BẢO MẬT: URL nguồn (có token) + ngưỡng AF / WR / bẻ KHÔNG bao giờ xuất hiện trong JSON trả cho tool; /api/admin/health đã lọc URL + đường dẫn file. Nên đặt token qua env để không nằm trong code.
+#   Đổi mà không sửa file (env):
+#       MAX789_ENABLED=0 (tắt cả 2 bàn) · MX_ACCESS_TOKEN (token dùng chung 2 bàn, dạng đã URL-encode như trong link) · MX_MD5_API_URL · MX_HU_API_URL (ghi đè cả URL nếu cần)
+#       MX_REFERER (thêm header Referer/Origin nếu server đòi) · MX_MD5_PATH · MX_HU_PATH (đổi file lưu)
+#       MXMD5_<TÊN> / MXHU_<TÊN> ghi đè từng thông số của khối config (vd. MXMD5_AF_ENABLED=0 · MXHU_WR_WINDOW=17 · MXHU_POLL_SEC=2).
+MX_ENABLED = _env_bool("MAX789_ENABLED", True)
+MX_TOKEN = os.environ.get("MX_ACCESS_TOKEN") or "05%2F7JlwSPGzAUIrqSI%2FP8h6QS8MIGpTuB3UwDAmuWFLRKFkRJ3ZFgxO%2FUJe1k%2Bg0LVCmODRrV5AiOrXPNybJPEmPCpHA4NMLOC%2FlIZzsUcUf9tZ1%2FnUTejQqbYrQ3YwMOYg00%2FOywJ17FJEulvUm%2F7iAYbzcLhuA%2B91kG6VDiSFDCRQQZwTDlJs%2FnAMFJoXWd1TXcU%2Fmnk0p44%2BTuOZ5WS7RtNfjFvM4GOz3mouvBsL%2F5I4IecVl7aWMgUucaP106jKvhZohqt%2FWPFZ6hitB04%2FOme0DRlWqh1Q9zMPupO5BMEiUaS3o23tzDypKjJzZzBm9z77sscR%2BUlBrnogu4cOBT8HQE%2B1ye%2BjypFMrUJ7YoKiaJ2LhfO9F6qYN3V14X2RE556%2FDitmvUGMSGt0v69iedjMJYa8GvaCvYpx1COakeMGTngwvEPraQc%2BB1tL.3cf7be0b858780dd698ccb19cdc78cade3120cfde06c2ace4a5d2915e65f5241"
+MX_MD5_API_URL = os.environ.get("MX_MD5_API_URL") or ("https://taixiumd5.qjwqwjhdasjb2ju78.com/api/md5luckydice/GetSoiCau?access_token=" + MX_TOKEN)
+MX_HU_API_URL = os.environ.get("MX_HU_API_URL") or ("https://taixiu.qjwqwjhdasjb2ju78.com/api/luckydice/GetSoiCau?access_token=" + MX_TOKEN)
+MX_REFERER = (os.environ.get("MX_REFERER") or "").strip()
+MX_MD5_PATH = os.environ.get("MX_MD5_PATH") or _data_path("mx_md5.json")
+MX_HU_PATH = os.environ.get("MX_HU_PATH") or _data_path("mx_hu.json")
+
+# ─ BÀN 1: MAX789 MD5 — config RIÊNG, chỉnh ở đây (đang là bản sao config LC MD5) ─
+MX_MD5_CFG = TableCfg("max789md5", _hit_env("MXMD5_", {
+    "ENABLED": True,
+    "GID": "mx_md5",
+    "POLL_SEC": 3.0,
+    "HIST_KEEP": HIST_KEEP,
+    "TIE_LOGIC": "AFM",
+    "CONSEC_CHECK": True,
+    # WR có trọng số
+    "WR_WINDOW": 7, "WR_DECAY": 0.95, "WR_FLOOR": 1.0, "WR_WEIGHT_NEWEST": 1.0, "WR_FLIP_WEIGHT": False, "WR_MIN_GAMES": 1,
+    # bẻ final (dùng khi AF tắt)
+    "FLIP_FINAL": False,
+    # AF: bước 1 bẻ logic
+    "AF_ENABLED": True, "AF_FLIP_LOW": 37, "AF_FLIP_HIGH": 63,
+    "AF_FLIP_BAND": True, "AF_FLIP_LOW_MIN": 0, "AF_FLIP_LOW_MAX": 40, "AF_FLIP_HIGH_MIN": 57, "AF_FLIP_HIGH_MAX": 100,
+    "AF_MIN_GAMES": 8,
+    # AF: bước 2 nhóm CAO/THẤP
+    "AF_GROUP_FLIPPED_ONLY": True, "AF_GROUP_NEED_MAJORITY": True,
+    "AF_SWITCH": True, "AF_SWITCH_NEED": 5, "AF_SWITCH_LEAD": False, "AF_SWITCH_PRIO": True,
+    # AF: bước 3 bẻ theo WR chế độ (WR chế độ < AF_MODE_BELOW % -> đảo final TÀI<->XỈU)
+    "AF_MODE_FLIP": False, "AF_MODE_WINDOW": 9, "AF_MODE_MIN": 7, "AF_MODE_BELOW": 45,
+    # AF: bẻ final riêng
+    "AF_FLIP_FINAL": False, "AF_FLIP_FINAL_CT": False, "AF_FLIP_FINAL_CAO": True, "AF_FLIP_FINAL_THAP": False, "AF_FLIP_FINAL_ALL": True,
+    # đánh giá đúng/sai + số ván lưu
+    "EVAL_WINDOW": 500, "PERSIST_KEEP": 300,
+}))
+
+# ─ BÀN 2: MAX789 HŨ — config RIÊNG, chỉnh ở đây (đang là bản sao config LC Hũ) ─
+MX_HU_CFG = TableCfg("max789hu", _hit_env("MXHU_", {
+    "ENABLED": True,
+    "GID": "mx_hu",
+    "POLL_SEC": 3.0,
+    "HIST_KEEP": HIST_KEEP,
+    "TIE_LOGIC": "AFM",
+    "CONSEC_CHECK": True,
+    # WR có trọng số
+    "WR_WINDOW": 20, "WR_DECAY": 0.95, "WR_FLOOR": 1.0, "WR_WEIGHT_NEWEST": 1.0, "WR_FLIP_WEIGHT": False, "WR_MIN_GAMES": 1,
+    # bẻ final (dùng khi AF tắt)
+    "FLIP_FINAL": False,
+    # AF: bước 1 bẻ logic
+    "AF_ENABLED": True, "AF_FLIP_LOW": 37, "AF_FLIP_HIGH": 63,
+    "AF_FLIP_BAND": True, "AF_FLIP_LOW_MIN": 20, "AF_FLIP_LOW_MAX": 47, "AF_FLIP_HIGH_MIN": 57, "AF_FLIP_HIGH_MAX": 75,
+    "AF_MIN_GAMES": 8,
+    # AF: bước 2 nhóm CAO/THẤP
+    "AF_GROUP_FLIPPED_ONLY": True, "AF_GROUP_NEED_MAJORITY": True,
+    "AF_SWITCH": True, "AF_SWITCH_NEED": 5, "AF_SWITCH_LEAD": False, "AF_SWITCH_PRIO": True,
+    # AF: bước 3 bẻ theo WR chế độ (WR chế độ < AF_MODE_BELOW % -> đảo final TÀI<->XỈU)
+    "AF_MODE_FLIP": False, "AF_MODE_WINDOW": 9, "AF_MODE_MIN": 7, "AF_MODE_BELOW": 45,
+    # AF: bẻ final riêng
+    "AF_FLIP_FINAL": False, "AF_FLIP_FINAL_CT": False, "AF_FLIP_FINAL_CAO": True, "AF_FLIP_FINAL_THAP": False, "AF_FLIP_FINAL_ALL": True,
     # đánh giá đúng/sai + số ván lưu
     "EVAL_WINDOW": 500, "PERSIST_KEEP": 300,
 }))
@@ -3357,15 +3440,26 @@ class LcTable(HitTable):
         """Referer gửi kèm khi quét nguồn (bàn con ghi đè để dùng Referer riêng)."""
         return LC_REFERER
 
-    def _fetch_items(self):
+    def _get_json(self):
+        """GET nguồn của bàn rồi parse JSON. Lỗi -> RuntimeError nói rõ bàn nào + nguyên nhân (panel / admin xem được; tool khách chỉ nhận câu chung qua _pub_err, URL / token không lộ)."""
         h = {"User-Agent": HIT_UA, "Accept": "application/json", "Cache-Control": "no-cache"}
         ref = self._ref()
         if ref:
             h["Referer"] = ref
             h["Origin"] = ref.rstrip("/")
         req = urllib.request.Request(self.url, headers=h)
-        with urllib.request.urlopen(req, timeout=UPSTREAM_TIMEOUT) as r:
-            data = json.loads(r.read().decode("utf-8"))
+        try:
+            with urllib.request.urlopen(req, timeout=UPSTREAM_TIMEOUT) as r:
+                raw = r.read()
+        except Exception as e:  # noqa: BLE001
+            raise RuntimeError(f"{self.label}: khong ket noi duoc nguon ({type(e).__name__}: {e}) - nguon chet / bi chan mang / token hoac domain da doi") from None
+        try:
+            return json.loads(raw.decode("utf-8"))
+        except Exception as e:  # noqa: BLE001
+            raise RuntimeError(f"{self.label}: nguon tra ve khong phai JSON ({type(e).__name__}) - token co the da het han") from None
+
+    def _fetch_items(self):
+        data = self._get_json()
         lst = data.get("list") if isinstance(data, dict) else data
         if not isinstance(lst, list):
             raise ValueError(f"API {self.label} ({self.key}) tra ve khong hop le (thieu 'list') - kiem tra token at= trong URL nguon cua ban nay")
@@ -3385,6 +3479,40 @@ class BvTable(LcTable):
         return BV_REFERER
 
 
+def _mx_parse(tb, data):
+    """MAX789 MD5 + HŨ: mảng JSON [{"SessionId", "FirstDice", "SecondDice", "ThirdDice", "DiceSum", "BetSide", "CreatedDate"}, ...] (phiên đầu = mới nhất). Chỉ lấy SessionId + 3 xúc xắc; Tài/Xỉu tự tính theo tổng (>= 11 = Tài). HitTable.refresh chỉ lưu thêm phiên CHƯA có."""
+    out = {}
+    for g in data:
+        if not isinstance(g, dict):
+            continue
+        r = _hit_rec(g.get("SessionId"), g.get("FirstDice"), g.get("SecondDice"), g.get("ThirdDice"))
+        if r:
+            out[r["phien"]] = r
+    return list(out.values())
+
+
+class MxTable(LcTable):
+    """Bàn MAX789 (MD5 + Hũ): cùng cơ chế LcTable (poller riêng · config riêng · file riêng), khác tên trường (_mx_parse) / game / key game / cờ bật tắt / Referer / thông báo lỗi token."""
+    game = "max789"
+    kgame = "max789"            # key game Max789 dùng được cả 2 bàn Max789 (và CHỈ key Max789)
+
+    @property
+    def active(self):
+        return bool(MX_ENABLED and self.cfg.ENABLED)
+
+    def _ref(self):
+        return MX_REFERER
+
+    def _fetch_items(self):
+        data = self._get_json()
+        lst = data
+        if isinstance(data, dict):                       # phòng khi nguồn bọc list trong object
+            lst = data.get("list") or data.get("data") or data.get("Data")
+        if not isinstance(lst, list):
+            raise ValueError(f"API {self.label} ({self.key}) tra ve khong hop le (khong phai mang phien) - access_token co the da het han, lay token moi dat vao MX_ACCESS_TOKEN")
+        return lst
+
+
 HIT_TABLES = {
     "hittxthuong": HitTable("hittxthuong", "TX Thường", HIT_TXTHUONG_CFG, HIT_TXTHUONG_PATH, _hit_parse_thuong),
     "hittxmd5": HitTable("hittxmd5", "TX MD5", HIT_TXMD5_CFG, HIT_TXMD5_PATH, _hit_parse_md5),
@@ -3392,8 +3520,11 @@ HIT_TABLES = {
     "lchu": LcTable("lchu", "LC Hũ", LC_HU_CFG, LC_HU_PATH, _lc_parse, LC_HU_API_URL),
     "betvipmd5": BvTable("betvipmd5", "BetVip MD5", BV_MD5_CFG, BV_MD5_PATH, _lc_parse, BV_MD5_API_URL),
     "betviphu": BvTable("betviphu", "BetVip Hũ", BV_HU_CFG, BV_HU_PATH, _lc_parse, BV_HU_API_URL),
+    "max789md5": MxTable("max789md5", "Max789 MD5", MX_MD5_CFG, MX_MD5_PATH, _mx_parse, MX_MD5_API_URL),
+    "max789hu": MxTable("max789hu", "Max789 Hũ", MX_HU_CFG, MX_HU_PATH, _mx_parse, MX_HU_API_URL),
 }
 BV_TABLE_KEYS = tuple(k for k, tb in HIT_TABLES.items() if tb.kgame == "betvip")
+MX_TABLE_KEYS = tuple(k for k, tb in HIT_TABLES.items() if tb.kgame == "max789")
 
 
 def hit_ensure_pollers():
@@ -3406,7 +3537,8 @@ _hc_lock = threading.Lock()
 _hc = {"loaded": False, "d": {"sun": {"den": 0, "luc": None},
                               "hittxthuong": {"den": 0, "luc": None}, "hittxmd5": {"den": 0, "luc": None},
                               "lcmd5": {"den": 0, "luc": None}, "lchu": {"den": 0, "luc": None},
-                              "betvipmd5": {"den": 0, "luc": None}, "betviphu": {"den": 0, "luc": None}}}
+                              "betvipmd5": {"den": 0, "luc": None}, "betviphu": {"den": 0, "luc": None},
+                              "max789md5": {"den": 0, "luc": None}, "max789hu": {"den": 0, "luc": None}}}
 
 
 def _hc_load_locked():
@@ -3782,7 +3914,7 @@ body.ft .amb .t{opacity:1}body.fx .amb .x{opacity:1}
 .spin{width:44px;height:44px;border-radius:50%;border:3px solid rgba(255,255,255,.1);border-top-color:var(--lime);border-right-color:var(--lime);animation:spin 1s linear infinite}
 
 /* ── dock di động ── */
-.dock{display:none}
+.dock{display:none}.dock::-webkit-scrollbar{display:none}
 
 /* ── cổng duyệt thiết bị ── */
 .gate{position:fixed;inset:0;z-index:100;display:none;place-items:center;padding:20px;background:rgba(5,6,10,.78);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
@@ -3819,7 +3951,7 @@ body.ft .amb .t{opacity:1}body.fx .amb .x{opacity:1}
   .app{grid-template-columns:1fr;gap:16px;padding:14px 14px 110px}
   .side{position:static;max-height:none;flex-direction:row;align-items:center;justify-content:space-between;flex-wrap:wrap}
   .side .navh,.side .nav,.side .sfoot{display:none}
-  .dock{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));position:fixed;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:30;padding:6px;border-radius:24px;background:rgba(14,16,24,.9);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);border:1px solid var(--ln2);box-shadow:0 20px 50px -10px #000}
+  .dock{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(50px,1fr);overflow-x:auto;scrollbar-width:none;position:fixed;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:30;padding:6px;border-radius:24px;background:rgba(14,16,24,.9);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);border:1px solid var(--ln2);box-shadow:0 20px 50px -10px #000}
   .dk{position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 1px 7px;border:0;background:none;border-radius:18px;font-size:9.5px;white-space:nowrap;color:var(--mu);min-width:0;line-height:1.1}
   .dk span{width:30px;height:30px;border-radius:10px;display:grid;place-items:center;font:800 10.5px var(--f);color:var(--gc);background:rgba(255,255,255,.05)}
   .dk.on{background:rgba(255,255,255,.08);color:var(--tx)}.dk.on span{background:var(--gc);color:#0b0d12}
@@ -3896,7 +4028,9 @@ const G=[
   {k:'lcm', n:'LC MD5',    sn:'LC MD5', s:'LM',u:'/api/predictlcmd5',       g:'lcmd5',      c:'#2dd4bf'},
   {k:'lch', n:'LC Hũ',     sn:'LC Hũ',  s:'LH',u:'/api/predictlchu',        g:'lchu',       c:'#94e04a'},
   {k:'bvm', n:'BetVip MD5',sn:'BV MD5', s:'BM',u:'/api/predictbetvipmd5',   g:'betvipmd5',  c:'#60a5fa'},
-  {k:'bvh', n:'BetVip Hũ', sn:'BV Hũ',  s:'BH',u:'/api/predictbetviphu',    g:'betviphu',   c:'#f87171'}];
+  {k:'bvh', n:'BetVip Hũ', sn:'BV Hũ',  s:'BH',u:'/api/predictbetviphu',    g:'betviphu',   c:'#f87171'},
+  {k:'mxm', n:'Max789 MD5',sn:'MX MD5', s:'XM',u:'/api/predictmax789md5',   g:'max789md5',  c:'#fb923c'},
+  {k:'mxh', n:'Max789 Hũ', sn:'MX Hũ',  s:'XH',u:'/api/predictmax789hu',    g:'max789hu',   c:'#34d399'}];
 const GM={};G.forEach(x=>GM[x.k]=x);
 const IPC='#8d94ab';
 const MN={ALL:'ALL',CAO:'CAO',THAP:'THẤP'},MS=['ALL','CAO','THAP'];
@@ -4186,7 +4320,7 @@ function liveTick(){
 function draw(){
   const g=cur!=='ip'?GM[cur]:null,d=g?S[cur].d:null;
   document.body.classList.toggle('ft',!!d&&d.du_doan==='TÀI');document.body.classList.toggle('fx',!!d&&d.du_doan==='XỈU');
-  put('#nav',safe(()=>navHtml(false),'menu'));put('#dock',safe(()=>navHtml(true),'menu'));
+  put('#nav',safe(()=>navHtml(false),'menu'));{const dk=$('#dock'),sx=dk?dk.scrollLeft:0;put('#dock',safe(()=>navHtml(true),'menu'));if(dk){dk.scrollLeft=sx;safe(()=>{const o=dk.querySelector('.dk.on');if(o)o.scrollIntoView({inline:'nearest',block:'nearest'})},'dock')}}
   if(cur==='ip')safe(drawIp,'IP');else safe(drawGame,'bàn');
   const t=d?`${d.du_doan} · #${d.phien} · ${g.n} — SUNVIW`:'SUNVIW · Radar Tài Xỉu';if(document.title!==t)document.title=t;
   put('#sfoot',`Thiết bị <b>${esc(DEVID.slice(0,6))}…${esc(DEVID.slice(-4))}</b>${d&&d.cap_nhat?`<br>Nguồn cập nhật <b>${esc(d.cap_nhat)}</b>`:''}`);
@@ -4361,7 +4495,7 @@ def ip_kind(path):
     if path in ("/api/predictsun", "/api/predict"):
         return "sun"
     if path in ("/api/predicthittxthuong", "/api/predicthittxmd5", "/api/predictlcmd5", "/api/predictlchu", "/api/predicttele68txmd5",
-                "/api/predictbetvipmd5", "/api/predictbetviphu"):
+                "/api/predictbetvipmd5", "/api/predictbetviphu", "/api/predictmax789md5", "/api/predictmax789hu"):
         return "hit"
     if path == "/api/html":
         return "panel"
@@ -4557,7 +4691,7 @@ def _pub_err(err, dflt):
 
 
 _CORS_EXACT = {"/", "/health", "/api/key/check", "/api/predictsun", "/api/predict", "/api/predicthittxthuong", "/api/predicthittxmd5",
-               "/api/predictlcmd5", "/api/predictlchu", "/api/predicttele68txmd5", "/api/predictbetvipmd5", "/api/predictbetviphu", "/api/notice"}
+               "/api/predictlcmd5", "/api/predictlchu", "/api/predicttele68txmd5", "/api/predictbetvipmd5", "/api/predictbetviphu", "/api/predictmax789md5", "/api/predictmax789hu", "/api/notice"}
 _NOFRAME_PREFIX = ("/api/admin", "/tool/autocuoc", "/api/autocuoc", "/autocuoc")
 
 # ── AUTO CƯỢC: GIAO DIỆN TÁCH RA FILE HTML RIÊNG (autocuoc.html), server chỉ còn là API ──────────────────────────
@@ -4800,10 +4934,10 @@ LOGIN_MAX_FAIL = 8                                    # sai quá N lần trong L
 LOGIN_LOCK_SEC = 900
 KEY_DEV_OPTIONS = (1, 2, 3, 5, 10, 20, 50)            # số thiết bị tối đa chọn được khi tạo key (1 key dùng được trên N thiết bị)
 KEY_DEV_DEFAULT = 1                                   # mặc định (cũng là số thiết bị của key cũ tạo trước bản này)
-KEY_GAMES = ("sun", "hit", "lc79", "betvip", "autolc")                            # game gắn được vào key người dùng — MỖI KEY CHỈ THUỘC 1 GAME, không gộp chung
+KEY_GAMES = ("sun", "hit", "lc79", "betvip", "max789", "autolc")                            # game gắn được vào key người dùng — MỖI KEY CHỈ THUỘC 1 GAME, không gộp chung
 _KEY_DEAD_GAMES = ("gb68",)                          # game ĐÃ GỠ: key cũ của game này vẫn nằm trong file nhưng KHÔNG dùng được game nào (không biến thành key "mọi game")
-KEY_GAME_LABEL = {"sun": "Sun", "hit": "Hit", "lc79": "LC79", "betvip": "BetVip", "gb68": "68GB (đã gỡ)", "autolc": "Auto cược LC"}
-KEY_PREFIX = {"sun": "SUN", "hit": "HIT", "lc79": "LC79", "betvip": "BETVIP", "autolc": "AUTOLC"}             # tiền tố key để nhìn là biết game: SUN-XXXX-... / HIT-XXXX-...
+KEY_GAME_LABEL = {"sun": "Sun", "hit": "Hit", "lc79": "LC79", "betvip": "BetVip", "max789": "Max789", "gb68": "68GB (đã gỡ)", "autolc": "Auto cược LC"}
+KEY_PREFIX = {"sun": "SUN", "hit": "HIT", "lc79": "LC79", "betvip": "BETVIP", "max789": "MAX789", "autolc": "AUTOLC"}             # tiền tố key để nhìn là biết game: SUN-XXXX-... / HIT-XXXX-...
 _lg = os.environ.get("SUNVIW_KEY_LEGACY_GAME", "all").strip().lower()
 _lg = "lc79" if _lg == "tele68" else _lg
 KEY_LEGACY_GAME = _lg if _lg in ("all", "sun", "hit", "lc79") else "all"   # game của key cũ chưa có trường game (xem khối CONFIG KEY / ADMIN)
@@ -5121,8 +5255,8 @@ def _game_ok(kg, game):
     """Key thuộc game `kg` có được dùng cho `game` không (game None = endpoint không gắn game cụ thể -> mọi key hợp lệ)."""
     if kg == "autolc" or game == "autolc":                # key AUTO CƯỢC LC chỉ dùng cho /tool/autocuoc; key cũ "all" cũng KHÔNG vào được auto cược
         return kg == game
-    if game == "betvip":                                   # BetVip: CHỈ key game BetVip — key cũ "mọi game" (all) không tự mở thêm game mới
-        return kg == "betvip"
+    if game in ("betvip", "max789"):                       # BetVip / Max789: CHỈ key đúng game đó — key cũ "mọi game" (all) không tự mở thêm game mới
+        return kg == game
     return game is None or kg == "all" or kg == game
 
 
@@ -5147,6 +5281,8 @@ def _path_game(p):
         return "lc79"
     if p in ("/api/predictbetvipmd5", "/api/predictbetviphu"):
         return "betvip"
+    if p in ("/api/predictmax789md5", "/api/predictmax789hu"):
+        return "max789"
     if p == "/api/notice":                                 # thông báo: game lấy từ ?game= (danh sách trắng) -> key game khác bị 403, KHÔNG đọc được thông báo game khác
         g = (request.args.get("game") or "").strip().lower()
         g = "lc79" if g == "tele68" else g
@@ -5636,7 +5772,7 @@ def api_panel_status():
     return _json({"ok": st == "approved", "status": st, "loi": _PANEL_MSG.get(st, "")}, 429 if st == "limit" else 200)
 
 
-_GATED_EXACT = {"/api/notice", "/api/predictsun", "/api/predict", "/api/predicthittxthuong", "/api/predicthittxmd5", "/api/predictlcmd5", "/api/predictlchu", "/api/predicttele68txmd5", "/api/predictbetvipmd5", "/api/predictbetviphu", "/api/ips", "/api/history/clear", "/api/history/regrade", "/api/history/wipe"}
+_GATED_EXACT = {"/api/notice", "/api/predictsun", "/api/predict", "/api/predicthittxthuong", "/api/predicthittxmd5", "/api/predictlcmd5", "/api/predictlchu", "/api/predicttele68txmd5", "/api/predictbetvipmd5", "/api/predictbetviphu", "/api/predictmax789md5", "/api/predictmax789hu", "/api/ips", "/api/history/clear", "/api/history/regrade", "/api/history/wipe"}
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -5661,17 +5797,18 @@ _GATED_EXACT = {"/api/notice", "/api/predictsun", "/api/predict", "/api/predicth
 #   Môi trường: SUNVIW_OFFSRV=1 -> khởi động (khi chưa có file) với TẤT CẢ bàn off · SUNVIW_OFFSRV_TABLES=lcmd5,hit -> chỉ các bàn / game này off (nhận tên bàn, hoặc game sun|hit|lc79) · SUNVIW_OFFSRV_PATH.
 #   Endpoint: GET /api/admin/offserver (xem) · POST /api/admin/offserver {"tables":["lcmd5"],"off":true} | {"games":["lc79"],"off":true} | {"all":true,"off":false} | {"off":true} (cũ = tất cả) — cần phiên admin CHÍNH.
 OFFSRV_PATH = os.environ.get("SUNVIW_OFFSRV_PATH", _data_path("sunviw_offserver.json"))
-OFFSRV_TABLES = ("sun", "hittxthuong", "hittxmd5", "lcmd5", "lchu", "betvipmd5", "betviphu")
+OFFSRV_TABLES = ("sun", "hittxthuong", "hittxmd5", "lcmd5", "lchu", "betvipmd5", "betviphu", "max789md5", "max789hu")
 OFFSRV_LABEL = {"sun": "Sun", "hittxthuong": "Hit · TX Thường", "hittxmd5": "Hit · TX MD5", "lcmd5": "LC · MD5", "lchu": "LC · Hũ",
-                "betvipmd5": "BetVip · MD5", "betviphu": "BetVip · Hũ"}
-OFFSRV_GAME_TABLES = {"sun": ("sun",), "hit": ("hittxthuong", "hittxmd5"), "lc79": ("lcmd5", "lchu"), "betvip": ("betvipmd5", "betviphu")}
-OFFSRV_GAME_LABEL = {"sun": "Sun", "hit": "Hitclub", "lc79": "LC79", "betvip": "BetVip"}
-OFFSRV_GAME_ALIAS = {"hitclub": "hit", "lc": "lc79", "tele68": "lc79", "bv": "betvip"}
+                "betvipmd5": "BetVip · MD5", "betviphu": "BetVip · Hũ", "max789md5": "Max789 · MD5", "max789hu": "Max789 · Hũ"}
+OFFSRV_GAME_TABLES = {"sun": ("sun",), "hit": ("hittxthuong", "hittxmd5"), "lc79": ("lcmd5", "lchu"), "betvip": ("betvipmd5", "betviphu"), "max789": ("max789md5", "max789hu")}
+OFFSRV_GAME_LABEL = {"sun": "Sun", "hit": "Hitclub", "lc79": "LC79", "betvip": "BetVip", "max789": "Max789"}
+OFFSRV_GAME_ALIAS = {"hitclub": "hit", "lc": "lc79", "tele68": "lc79", "bv": "betvip", "mx": "max789", "max": "max789"}
 OFFSRV_TABLE_ALIAS = {"tele68txmd5": "lcmd5"}
 OFFSRV_PATH_TABLE = {"/api/predictsun": "sun", "/api/predict": "sun",
                      "/api/predicthittxthuong": "hittxthuong", "/api/predicthittxmd5": "hittxmd5",
                      "/api/predictlcmd5": "lcmd5", "/api/predicttele68txmd5": "lcmd5", "/api/predictlchu": "lchu",
-                     "/api/predictbetvipmd5": "betvipmd5", "/api/predictbetviphu": "betviphu"}
+                     "/api/predictbetvipmd5": "betvipmd5", "/api/predictbetviphu": "betviphu",
+                     "/api/predictmax789md5": "max789md5", "/api/predictmax789hu": "max789hu"}
 OFFSRV_PATHS = frozenset(OFFSRV_PATH_TABLE)
 OFFSRV_MSG = "đang OFF — tạm ngừng cấp dự đoán cho tool. Vui lòng thử lại sau."
 
@@ -5867,7 +6004,7 @@ def _view_guard(tk):
     if not panel and not getattr(flask_g, "key_ok", False):
         return _json({"ok": False, "can_key": True, "loi": "thieu key"}, 401)
     kg = getattr(flask_g, "key_game", "")
-    if tk not in _key_tables(kg) or (not panel and tk in BV_TABLE_KEYS and kg != "betvip"):
+    if tk not in _key_tables(kg) or (not panel and tk in BV_TABLE_KEYS and kg != "betvip") or (not panel and tk in MX_TABLE_KEYS and kg != "max789"):
         return _json({"ok": False, "sai_game": True, "loi": "key khong thuoc game nay"}, 403)
     if offsrv_table_off(tk) and not getattr(flask_g, "off_ok", False):
         return _offsrv_block(tk)
@@ -6361,7 +6498,7 @@ def api_admin_keys_create():
     game = str(b.get("game") or "").strip().lower()
     game = "lc79" if game == "tele68" else game
     if kind == "user" and game not in KEY_GAMES:       # key người dùng PHẢI chọn đúng 1 game (không có key gộp chung)
-        return _json({"ok": False, "loi": "chua chon game cho key (sun, hit, lc79, betvip hoac autolc)"}, 400)
+        return _json({"ok": False, "loi": "chua chon game cho key (sun, hit, lc79, betvip, max789 hoac autolc)"}, 400)
     try:
         days = int(b.get("days"))
     except (TypeError, ValueError):
@@ -6670,7 +6807,7 @@ main{padding:0 22px 90px;min-width:0}
 .okc{color:var(--ok)}.noc{color:var(--no)}
 .bd{display:inline-flex;align-items:center;gap:5px;height:21px;padding:0 8px;border-radius:99px;font-size:11.5px;font-weight:600;background:var(--pn2);color:var(--mu);white-space:nowrap}
 .bd.ok{background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)}.bd.soon,.bd.wait{background:color-mix(in srgb,var(--wa) 18%,transparent);color:var(--wa)}.bd.ex{background:color-mix(in srgb,var(--no) 16%,transparent);color:var(--no)}
-.g::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--gc,var(--mu))}.g-sun{--gc:#e0a100}.g-hit{--gc:#1f9bd1}.g-lc79{--gc:#d6458f}.g-betvip{--gc:#e2552b}.g-autolc{--gc:#8a5cf5}
+.g::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--gc,var(--mu))}.g-sun{--gc:#e0a100}.g-hit{--gc:#1f9bd1}.g-lc79{--gc:#d6458f}.g-betvip{--gc:#e2552b}.g-max789{--gc:#f08a24}.g-autolc{--gc:#8a5cf5}
 /* danh sách key */
 .tb{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}.in{height:38px;padding:0 12px;border-radius:10px;border:1px solid var(--ln);background:var(--pn);min-width:0}.in:focus{outline:0;border-color:var(--ac)}.tb .in.q{flex:1 1 220px}
 .cp{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}.cp button{height:32px;padding:0 12px;border-radius:99px;border:1px solid var(--ln);background:var(--pn);color:var(--mu);font-size:13px}.cp button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
@@ -6724,14 +6861,14 @@ const fmt=t=>t?new Date(t*1000).toLocaleString('vi-VN'):'—',now=()=>Date.now()
 const left=s=>{if(s<=0)return'đã hết hạn';const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60);return'còn '+(d?d+' ngày '+h+' giờ':h?h+' giờ '+m+' phút':m+' phút')};
 const ago=t=>{const s=Math.max(0,now()-t|0);return s<60?'vừa xong':s<3600?(s/60|0)+' phút trước':s<86400?(s/3600|0)+' giờ trước':(s/86400|0)+' ngày trước'};
 const shw=h=>String(h).length>14?h.slice(0,8)+'…'+h.slice(-4):h,vnd=n=>Number(n||0).toLocaleString('vi-VN')+' đ',fN=n=>Number(n||0).toLocaleString('vi-VN'),fNet=n=>(n>=0?'+':'')+fN(n);
-const GL={sun:'Sun',hit:'Hit',lc79:'LC79',betvip:'BetVip',autolc:'Auto cược LC',gb68:'68GB',all:'Mọi game'},DL={1:'1 ngày',2:'2 ngày',3:'3 ngày',7:'1 tuần',14:'2 tuần',30:'1 tháng',60:'2 tháng',90:'3 tháng',180:'6 tháng',365:'1 năm'};
+const GL={sun:'Sun',hit:'Hit',lc79:'LC79',betvip:'BetVip',max789:'Max789',autolc:'Auto cược LC',gb68:'68GB',all:'Mọi game'},DL={1:'1 ngày',2:'2 ngày',3:'3 ngày',7:'1 tuần',14:'2 tuần',30:'1 tháng',60:'2 tháng',90:'3 tháng',180:'6 tháng',365:'1 năm'};
 const ic=p=>`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
 const I={home:ic('<path d="M3 11 12 3l9 8M5 10v10h14V10"/>'),key:ic('<circle cx="8" cy="15" r="4"/><path d="M10.8 12.2 20 3m-4 4 3 3"/>'),plus:ic('<path d="M12 5v14M5 12h14"/>'),dev:ic('<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>'),bet:ic('<path d="M3 17l6-6 4 4 8-8M14 7h7v7"/>'),rev:ic('<path d="M12 2v20M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>'),
  cp:ic('<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>'),del:ic('<path d="M4 7h16M10 11v6m4-6v6M6 7l1 13h10l1-13M9 7V4h6v3"/>'),rf:ic('<path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/>'),out:ic('<path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M16 8l4 4-4 4M20 12H9"/>'),mo:ic('<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>'),th:ic('<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/>'),clk:ic('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>')};
 I.bell=ic('<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>');
 I.pwr=ic('<path d="M12 3v9"/><path d="M6.4 6.4a8 8 0 1 0 11.2 0"/>');
 let S=null;try{S=JSON.parse(sessionStorage.getItem('as')||'null')}catch(e){}
-let V='ov',KEYS=[],DAYS=[1,3,7,30,60,90],DEVO=[1,2,3,5,10,20,50],GAMES=[{id:'sun'},{id:'hit'},{id:'lc79'},{id:'betvip'},{id:'autolc'}],NEW=[],FL=new Set(),SEL=new Set(),F={t:'all',s:'new',q:''},CF={type:'user',game:'sun',days:30,dev:1,n:1,ba:0,bu:'hour'},PV=[],PF='pending',OS=null,RV=null,AC=null,ACF='all',busy=false,need=false,lastT=0,NT=null,ND={all:false,games:[],text:'',x:50,y:20,size:28,dur:300,cn:5,cu:'m',pos:false,bad:false};
+let V='ov',KEYS=[],DAYS=[1,3,7,30,60,90],DEVO=[1,2,3,5,10,20,50],GAMES=[{id:'sun'},{id:'hit'},{id:'lc79'},{id:'betvip'},{id:'max789'},{id:'autolc'}],NEW=[],FL=new Set(),SEL=new Set(),F={t:'all',s:'new',q:''},CF={type:'user',game:'sun',days:30,dev:1,n:1,ba:0,bu:'hour'},PV=[],PF='pending',OS=null,RV=null,AC=null,ACF='all',busy=false,need=false,lastT=0,NT=null,ND={all:false,games:[],text:'',x:50,y:20,size:28,dur:300,cn:5,cu:'m',pos:false,bad:false};
 const isM=()=>S&&S.role==='main',sleep=ms=>new Promise(r=>setTimeout(r,ms));
 function toast(m,bad){const e=document.createElement('div');if(bad)e.className='e';e.textContent=m;$('#ts').appendChild(e);setTimeout(()=>e.remove(),2600)}
 function ask(msg,ok){return new Promise(r=>{const d=$('#dg');d.innerHTML=`<div class="di"><p style="margin:0">${esc(msg)}</p><div class="da"><button class="gh" data-x="no">Hủy</button><button class="pr" data-x="ok">${esc(ok||'Xác nhận')}</button></div></div>`;d.onclose=null;d.dataset.ask=1;d.dataset.k='';d._r=r;d.showModal()})}
@@ -7176,11 +7313,19 @@ def _hit_predict(tb):
     with tb.slock:
         have = tb.state["result"] is not None
     if not have:                                  # request đầu tiên, poller chưa kịp quét xong
-        try:
-            tb.refresh()
-        except Exception as e:  # noqa: BLE001
-            with tb.slock:
-                tb.state["error"] = f"{type(e).__name__}: {e}"
+        if tb.started:                            # poller đang chạy -> CHỜ nó (tối đa HIT_FIRST_WAIT giây, thấy kết quả HOẶC lỗi là trả ngay).
+            t0 = time.time()                      # KHÔNG tự refresh() thêm: nguồn treo thì mỗi request sẽ xếp hàng chờ khóa rồi quét thêm 9s -> chồng chất, panel báo "phản hồi quá chậm" và poller bị đói khóa
+            while time.time() - t0 < HIT_FIRST_WAIT:
+                with tb.slock:
+                    if tb.state["result"] is not None or tb.state["error"] is not None:
+                        break
+                time.sleep(0.2)
+        else:                                     # poller chưa chạy (vd. chạy bằng WSGI không qua main) -> quét 1 lần tại chỗ như cũ
+            try:
+                tb.refresh()
+            except Exception as e:  # noqa: BLE001
+                with tb.slock:
+                    tb.state["error"] = f"{type(e).__name__}: {e}"
     with tb.slock:
         res, err, upd = tb.state["result"], tb.state["error"], tb.state["updated"]
     if res is None:
@@ -7226,10 +7371,23 @@ def api_predict_bv_hu():
     return _hit_predict(HIT_TABLES["betviphu"])
 
 
+@app.route("/api/predictmax789md5")
+def api_predict_mx_md5():
+    """[MAX789 · MD5] — config riêng MX_MD5_CFG · data riêng mx_md5.json · nguồn: list nhiều phiên (SessionId / FirstDice / SecondDice / ThirdDice), chỉ lưu thêm phiên chưa có. CHỈ key game Max789 / panel."""
+    return _hit_predict(HIT_TABLES["max789md5"])
+
+
+@app.route("/api/predictmax789hu")
+def api_predict_mx_hu():
+    """[MAX789 · HŨ] — config riêng MX_HU_CFG · data riêng mx_hu.json · nguồn: list nhiều phiên (cùng định dạng Max789 MD5). CHỈ key game Max789 / panel."""
+    return _hit_predict(HIT_TABLES["max789hu"])
+
+
 # ─ phạm vi lịch sử: tên game / tên bàn -> tập khoá bàn (dùng chung cho clear · regrade · wipe) ─
 _HIST_GAME_SETS = {"hitclub": ("hittxthuong", "hittxmd5"), "lc": ("lcmd5", "lchu"), "lc79": ("lcmd5", "lchu"),
-                   "tele68txmd5": ("lcmd5",), "tele68": ("lcmd5",), "betvip": ("betvipmd5", "betviphu"), "bv": ("betvipmd5", "betviphu")}
-_HIST_BAD_GAME = 'game phai la "sun", "hittxthuong", "hittxmd5", "hitclub", "lcmd5", "lchu", "betvip", "betvipmd5", "betviphu" hoac "all"'
+                   "tele68txmd5": ("lcmd5",), "tele68": ("lcmd5",), "betvip": ("betvipmd5", "betviphu"), "bv": ("betvipmd5", "betviphu"),
+                   "max789": ("max789md5", "max789hu"), "mx": ("max789md5", "max789hu")}
+_HIST_BAD_GAME = 'game phai la "sun", "hittxthuong", "hittxmd5", "hitclub", "lcmd5", "lchu", "betvip", "betvipmd5", "betviphu", "max789", "max789md5", "max789hu" hoac "all"'
 
 
 def _hist_scope(g):
@@ -7392,6 +7550,7 @@ def health():
     s["hitclub"] = {"bat": HIT_ENABLED, "ban": {k: tb.health() for k, tb in HIT_TABLES.items() if tb.kgame == "hit"}}
     s["lc79"] = {"bat": LC_ENABLED, "ban": {k: tb.health() for k, tb in HIT_TABLES.items() if tb.kgame == "lc79"}}
     s["betvip"] = {"bat": BV_ENABLED, "ban": {k: tb.health() for k, tb in HIT_TABLES.items() if tb.kgame == "betvip"}}
+    s["max789"] = {"bat": MX_ENABLED, "ban": {k: tb.health() for k, tb in HIT_TABLES.items() if tb.kgame == "max789"}}
     s["autobet"] = ab_health()
     return _json(_scrub_pub(s))
 
@@ -10378,6 +10537,8 @@ def _sec_report():
         w.append("LC_MD5_API_URL / LC_HU_API_URL chua dat -> URL (kem token at=) dang nam trong code")
     if not os.environ.get("BV_MD5_API_URL") or not os.environ.get("BV_HU_API_URL"):
         w.append("BV_MD5_API_URL / BV_HU_API_URL chua dat -> URL BetVip (kem token at=) dang nam trong code")
+    if not (os.environ.get("MX_ACCESS_TOKEN") or (os.environ.get("MX_MD5_API_URL") and os.environ.get("MX_HU_API_URL"))):
+        w.append("MX_ACCESS_TOKEN chua dat -> access_token Max789 dang nam trong code")
     if not os.environ.get("AUTOBET_AT_TOKENS"):
         w.append("AUTOBET_AT_TOKENS chua dat -> token at dang nam trong code")
     if not AB_SERVE_UI and not AB_ALLOWED_ORIGINS:
@@ -10414,7 +10575,7 @@ def _security_selfcheck():
             probs.append(f"{p} chua nam trong _GATED_EXACT -> da tu them vao cong key")
         if tk != "sun" and tk not in HIT_TABLES:
             probs.append(f"{p} tro toi ban '{tk}' khong ton tai")
-    for fn in (api_predict, api_predict_hit_thuong, api_predict_hit_md5, api_predict_lc_md5, api_predict_lc_hu, api_predict_bv_md5, api_predict_bv_hu):
+    for fn in (api_predict, api_predict_hit_thuong, api_predict_hit_md5, api_predict_lc_md5, api_predict_lc_hu, api_predict_bv_md5, api_predict_bv_hu, api_predict_mx_md5, api_predict_mx_hu):
         try:
             if "_view_guard" not in fn.__code__.co_names and "_hit_predict" not in fn.__code__.co_names:
                 probs.append(f"view {fn.__name__} khong goi _view_guard")
