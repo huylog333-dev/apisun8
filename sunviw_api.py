@@ -702,20 +702,20 @@ LC_MD5_CFG = TableCfg("lcmd5", _hit_env("LCMD5_", _hit_env("TELE68TXMD5_", {
     "TIE_LOGIC": "AFM",
     "CONSEC_CHECK": True,
     # WR có trọng số
-    "WR_WINDOW": 8, "WR_DECAY": 0.95, "WR_FLOOR": 1.0, "WR_WEIGHT_NEWEST": 1.0, "WR_FLIP_WEIGHT": False, "WR_MIN_GAMES": 1,
+    "WR_WINDOW": 13, "WR_DECAY": 0.95, "WR_FLOOR": 1.0, "WR_WEIGHT_NEWEST": 1.0, "WR_FLIP_WEIGHT": False, "WR_MIN_GAMES": 1,
     # bẻ final (dùng khi AF tắt)
     "FLIP_FINAL": False,
     # AF: bước 1 bẻ logic
     "AF_ENABLED": True, "AF_FLIP_LOW": 37, "AF_FLIP_HIGH": 63,
-    "AF_FLIP_BAND": True, "AF_FLIP_LOW_MIN": 0, "AF_FLIP_LOW_MAX": 40, "AF_FLIP_HIGH_MIN": 57, "AF_FLIP_HIGH_MAX": 100,
+    "AF_FLIP_BAND": True, "AF_FLIP_LOW_MIN": 0, "AF_FLIP_LOW_MAX": 40, "AF_FLIP_HIGH_MIN": 57, "AF_FLIP_HIGH_MAX": 75,
     "AF_MIN_GAMES": 8,
     # AF: bước 2 nhóm CAO/THẤP
     "AF_GROUP_FLIPPED_ONLY": True, "AF_GROUP_NEED_MAJORITY": True,
-    "AF_SWITCH": True, "AF_SWITCH_NEED": 5, "AF_SWITCH_LEAD": False, "AF_SWITCH_PRIO": True,       # đổi chế độ ALL / CAO / THẤP chỉ cần N phiếu (thay vì đa số 7/13) — AF_SWITCH=False = về cách gốc · AF_SWITCH_LEAD=True = chế độ mới phải dẫn đầu mới đổi
+    "AF_SWITCH": True, "AF_SWITCH_NEED": 3, "AF_SWITCH_LEAD": False, "AF_SWITCH_PRIO": True,       # đổi chế độ ALL / CAO / THẤP chỉ cần N phiếu (thay vì đa số 7/13) — AF_SWITCH=False = về cách gốc · AF_SWITCH_LEAD=True = chế độ mới phải dẫn đầu mới đổi
     # AF: bước 3 bẻ theo WR chế độ (WR chế độ < AF_MODE_BELOW % -> đảo final TÀI<->XỈU)
     "AF_MODE_FLIP": False, "AF_MODE_WINDOW": 9, "AF_MODE_MIN": 7, "AF_MODE_BELOW": 45,
     # AF: bẻ final riêng
-    "AF_FLIP_FINAL": False, "AF_FLIP_FINAL_CT": False, "AF_FLIP_FINAL_CAO": False, "AF_FLIP_FINAL_THAP": False, "AF_FLIP_FINAL_ALL": False,   # bộ backtest 300 ván (ALL cao nhất + ALL nhiều ván nhất): KHÔNG bẻ final chế độ nào
+    "AF_FLIP_FINAL": False, "AF_FLIP_FINAL_CT": False, "AF_FLIP_FINAL_CAO": False, "AF_FLIP_FINAL_THAP": False, "AF_FLIP_FINAL_ALL": True,   # bộ backtest 300 ván (ALL cao nhất + ALL nhiều ván nhất): KHÔNG bẻ final chế độ nào
     # đánh giá đúng/sai + số ván lưu
     "EVAL_WINDOW": 500, "PERSIST_KEEP": 300,
 })))
@@ -730,20 +730,20 @@ LC_HU_CFG = TableCfg("lchu", _hit_env("LCHU_", {
     "TIE_LOGIC": "AFM",
     "CONSEC_CHECK": True,
     # WR có trọng số
-    "WR_WINDOW": 23, "WR_DECAY": 0.95, "WR_FLOOR": 1.0, "WR_WEIGHT_NEWEST": 1.0, "WR_FLIP_WEIGHT": False, "WR_MIN_GAMES": 1,
+    "WR_WINDOW": 25, "WR_DECAY": 0.95, "WR_FLOOR": 1.0, "WR_WEIGHT_NEWEST": 1.0, "WR_FLIP_WEIGHT": False, "WR_MIN_GAMES": 1,
     # bẻ final (dùng khi AF tắt)
     "FLIP_FINAL": False,
     # AF: bước 1 bẻ logic
     "AF_ENABLED": True, "AF_FLIP_LOW": 37, "AF_FLIP_HIGH": 63,
-    "AF_FLIP_BAND": True, "AF_FLIP_LOW_MIN": 20, "AF_FLIP_LOW_MAX": 47, "AF_FLIP_HIGH_MIN": 57, "AF_FLIP_HIGH_MAX": 75,
+    "AF_FLIP_BAND": True, "AF_FLIP_LOW_MIN": 20, "AF_FLIP_LOW_MAX": 47, "AF_FLIP_HIGH_MIN": 57, "AF_FLIP_HIGH_MAX": 80,
     "AF_MIN_GAMES": 8,
     # AF: bước 2 nhóm CAO/THẤP
     "AF_GROUP_FLIPPED_ONLY": True, "AF_GROUP_NEED_MAJORITY": True,
-    "AF_SWITCH": True, "AF_SWITCH_NEED": 5, "AF_SWITCH_LEAD": False, "AF_SWITCH_PRIO": True,
+    "AF_SWITCH": True, "AF_SWITCH_NEED": 6, "AF_SWITCH_LEAD": False, "AF_SWITCH_PRIO": True,
     # AF: bước 3 bẻ theo WR chế độ (WR chế độ < AF_MODE_BELOW % -> đảo final TÀI<->XỈU)
     "AF_MODE_FLIP": False, "AF_MODE_WINDOW": 9, "AF_MODE_MIN": 7, "AF_MODE_BELOW": 45,
     # AF: bẻ final riêng
-    "AF_FLIP_FINAL": False, "AF_FLIP_FINAL_CT": False, "AF_FLIP_FINAL_CAO": True, "AF_FLIP_FINAL_THAP": False, "AF_FLIP_FINAL_ALL": False,
+    "AF_FLIP_FINAL": False, "AF_FLIP_FINAL_CT": False, "AF_FLIP_FINAL_CAO": False, "AF_FLIP_FINAL_THAP": True, "AF_FLIP_FINAL_ALL": False,
     # đánh giá đúng/sai + số ván lưu
     "EVAL_WINDOW": 500, "PERSIST_KEEP": 300,
 }))
@@ -776,24 +776,24 @@ BV_MD5_CFG = TableCfg("betvipmd5", _hit_env("BVMD5_", {
     "GID": "bv_md5",
     "POLL_SEC": 3.0,
     "HIST_KEEP": HIST_KEEP,
-    "DATA_WIN": 0,   # ◄◄ số ván gần nhất dùng làm data của RIÊNG bàn này (0 = không giới hạn · vd. 300 · tối thiểu 40) — đổi xong bấm "Tính lại theo config" ở panel
+    "DATA_WIN": 120,   # ◄◄ số ván gần nhất dùng làm data của RIÊNG bàn này (0 = không giới hạn · vd. 300 · tối thiểu 40) — đổi xong bấm "Tính lại theo config" ở panel
     "TIE_LOGIC": "AFM",
     "CONSEC_CHECK": True,
     # WR có trọng số
-    "WR_WINDOW": 13, "WR_DECAY": 0.95, "WR_FLOOR": 1.0, "WR_WEIGHT_NEWEST": 1.0, "WR_FLIP_WEIGHT": False, "WR_MIN_GAMES": 1,
+    "WR_WINDOW": 20, "WR_DECAY": 0.95, "WR_FLOOR": 1.0, "WR_WEIGHT_NEWEST": 1.0, "WR_FLIP_WEIGHT": False, "WR_MIN_GAMES": 1,
     # bẻ final (dùng khi AF tắt)
     "FLIP_FINAL": False,
     # AF: bước 1 bẻ logic
     "AF_ENABLED": True, "AF_FLIP_LOW": 37, "AF_FLIP_HIGH": 63,
-    "AF_FLIP_BAND": True, "AF_FLIP_LOW_MIN": 0, "AF_FLIP_LOW_MAX": 40, "AF_FLIP_HIGH_MIN": 57, "AF_FLIP_HIGH_MAX": 100,
+    "AF_FLIP_BAND": True, "AF_FLIP_LOW_MIN": 20, "AF_FLIP_LOW_MAX": 40, "AF_FLIP_HIGH_MIN": 55, "AF_FLIP_HIGH_MAX": 83,
     "AF_MIN_GAMES": 8,
     # AF: bước 2 nhóm CAO/THẤP
     "AF_GROUP_FLIPPED_ONLY": True, "AF_GROUP_NEED_MAJORITY": True,
-    "AF_SWITCH": True, "AF_SWITCH_NEED": 5, "AF_SWITCH_LEAD": False, "AF_SWITCH_PRIO": True,
+    "AF_SWITCH": True, "AF_SWITCH_NEED": 3, "AF_SWITCH_LEAD": False, "AF_SWITCH_PRIO": True,
     # AF: bước 3 bẻ theo WR chế độ (WR chế độ < AF_MODE_BELOW % -> đảo final TÀI<->XỈU)
     "AF_MODE_FLIP": False, "AF_MODE_WINDOW": 9, "AF_MODE_MIN": 7, "AF_MODE_BELOW": 45,
     # AF: bẻ final riêng
-    "AF_FLIP_FINAL": False, "AF_FLIP_FINAL_CT": False, "AF_FLIP_FINAL_CAO": False, "AF_FLIP_FINAL_THAP": True, "AF_FLIP_FINAL_ALL": False,
+    "AF_FLIP_FINAL": False, "AF_FLIP_FINAL_CT": False, "AF_FLIP_FINAL_CAO": True, "AF_FLIP_FINAL_THAP": True, "AF_FLIP_FINAL_ALL": True,
     # đánh giá đúng/sai + số ván lưu
     "EVAL_WINDOW": 500, "PERSIST_KEEP": 300,
 }))
