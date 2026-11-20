@@ -34,6 +34,10 @@ Endpoint:
     GET /api/admin/panel (+ POST /approve · /deny · /remove · /ban · /unban) -> admin CHÍNH xem + duyệt / từ chối / gỡ quyền / BAN (danh sách đen: chặn cả IP + thiết bị khỏi /api/html, trả 404) thiết bị vào panel (mục "Duyệt thiết bị vào panel HTML" ở trang /api/admin)
     GET|POST /api/admin/offserver -> OFF SERVER THEO TỪNG BÀN / GAME (CHỈ admin chính, tab "Off server" ở /api/admin): tắt bàn nào (Sun · Hit TX Thường · Hit TX MD5 · LC MD5 · LC Hũ) hay cả game (Sun · Hit · LC79) hay tất cả thì CHỈ tool dùng bàn đó nhận 503 {"server_off": true} và không có dự đoán — các bàn khác chạy bình thường; server + panel HTML (thiết bị đã duyệt / admin chính) vẫn cập nhật. POST {"tables":["lcmd5"],"off":true} | {"games":["lc79"],"off":true} | {"all":true,"off":false} (kiểu cũ {"off":true} = tất cả). Endpoint dự đoán LUÔN đòi key admin tạo + kiểm lại ngay trong view (xem khối "OFF SERVER"). Lưu file, còn sau restart
     GET /api/admin/cuocstatus    -> (admin CHÍNH) bảng TOÀN BỘ tài khoản đang / đã dùng auto cược; bấm 1 dòng xem hồ sơ: chiến thuật đã chọn, số dư, tổng lãi/lỗ, thắng/thua, tổng đã cược, log + ván gần nhất; POST /api/admin/cuocstatus/action {id, act: stop|remove}
+    BOT TELEGRAM (ẨN HOÀN TOÀN, xem khối "BOT TELEGRAM BÁN KEY"): /<slug-bí-mật>/{catalog,buy,seed,bc_claim,bc_done,bc_log} — slug suy ra từ SUNVIW_BOT_SECRET, mọi request ký HMAC, sai bất kỳ điều gì -> 404. Bot mua key + lấy giá / link game / cấu hình / danh sách admin ở đây.
+    GET|POST /api/admin/bot (+ /game · /cfg) -> panel: giá gốc từng gói, link game, bán/ẩn game, cấu hình bot (CSKH, box feedback, nạp tối thiểu..., admin chính + ngân hàng CHỈ admin chính) — quyền botcfg
+    GET|POST /api/admin/broadcast (+ /send · /cancel) -> gửi thông báo tới TOÀN BỘ khách của bot (bot nhận ở lần đồng bộ kế tiếp) — quyền broadcast
+    POST /api/admin/keys/perms   -> CHỈ admin chính: đặt quyền + Chat ID Telegram cho 1 key admin phụ (xem khối "QUYỀN ADMIN PHỤ")
     GET /health                  -> CÔNG KHAI, chỉ {"ok":true} (healthcheck). Health đầy đủ: GET /api/admin/health (admin chính, header X-Admin-Token)
     GET /api/admin               -> trang quản trị: MỘT ô nhập key, server tự nhận diện admin chính / admin phụ / key người dùng / key không tồn tại — tạo / xóa (tích chọn nhiều key) / xem key, MỌI key gắn HWID thiết bị (1 key dùng được N thiết bị), hiện lần dùng gần nhất, KHÔNG hiện ở trang chủ (xem khối "CONFIG KEY / ADMIN")
     POST /api/admin/keys/add-time -> CỘNG GIỜ cho key (nút "+1 giờ" ở trang /api/admin; admin chính + admin phụ): {"key"|"keys":[...], "amount": N, "unit": "hour"|"day"|"week"|"month"} (hoặc "hours": N kiểu cũ) · tối đa 365 ngày mỗi lần · admin phụ chỉ key mình tạo · key hết hạn được tính lại từ bây giờ
@@ -715,7 +719,7 @@ LC_MD5_CFG = TableCfg("lcmd5", _hit_env("LCMD5_", _hit_env("TELE68TXMD5_", {
     # AF: bước 3 bẻ theo WR chế độ (WR chế độ < AF_MODE_BELOW % -> đảo final TÀI<->XỈU)
     "AF_MODE_FLIP": False, "AF_MODE_WINDOW": 9, "AF_MODE_MIN": 7, "AF_MODE_BELOW": 45,
     # AF: bẻ final riêng
-    "AF_FLIP_FINAL": False, "AF_FLIP_FINAL_CT": False, "AF_FLIP_FINAL_CAO": False, "AF_FLIP_FINAL_THAP": True, "AF_FLIP_FINAL_ALL": True,   # bộ backtest 300 ván (ALL cao nhất + ALL nhiều ván nhất): KHÔNG bẻ final chế độ nào
+    "AF_FLIP_FINAL": False, "AF_FLIP_FINAL_CT": False, "AF_FLIP_FINAL_CAO": True, "AF_FLIP_FINAL_THAP": False, "AF_FLIP_FINAL_ALL": True,   # bộ backtest 300 ván (ALL cao nhất + ALL nhiều ván nhất): KHÔNG bẻ final chế độ nào
     # đánh giá đúng/sai + số ván lưu
     "EVAL_WINDOW": 500, "PERSIST_KEEP": 300,
 })))
@@ -793,7 +797,7 @@ BV_MD5_CFG = TableCfg("betvipmd5", _hit_env("BVMD5_", {
     # AF: bước 3 bẻ theo WR chế độ (WR chế độ < AF_MODE_BELOW % -> đảo final TÀI<->XỈU)
     "AF_MODE_FLIP": False, "AF_MODE_WINDOW": 9, "AF_MODE_MIN": 7, "AF_MODE_BELOW": 45,
     # AF: bẻ final riêng
-    "AF_FLIP_FINAL": False, "AF_FLIP_FINAL_CT": False, "AF_FLIP_FINAL_CAO": False, "AF_FLIP_FINAL_THAP": True, "AF_FLIP_FINAL_ALL": False,
+    "AF_FLIP_FINAL": False, "AF_FLIP_FINAL_CT": False, "AF_FLIP_FINAL_CAO": True, "AF_FLIP_FINAL_THAP": True, "AF_FLIP_FINAL_ALL": True,
     # đánh giá đúng/sai + số ván lưu
     "EVAL_WINDOW": 500, "PERSIST_KEEP": 300,
 }))
@@ -821,7 +825,7 @@ BV_HU_CFG = TableCfg("betviphu", _hit_env("BVHU_", {
     # AF: bước 3 bẻ theo WR chế độ (WR chế độ < AF_MODE_BELOW % -> đảo final TÀI<->XỈU)
     "AF_MODE_FLIP": False, "AF_MODE_WINDOW": 9, "AF_MODE_MIN": 7, "AF_MODE_BELOW": 45,
     # AF: bẻ final riêng
-    "AF_FLIP_FINAL": False, "AF_FLIP_FINAL_CT": False, "AF_FLIP_FINAL_CAO": True, "AF_FLIP_FINAL_THAP": True, "AF_FLIP_FINAL_ALL": True,
+    "AF_FLIP_FINAL": False, "AF_FLIP_FINAL_CT": False, "AF_FLIP_FINAL_CAO": False, "AF_FLIP_FINAL_THAP": True, "AF_FLIP_FINAL_ALL": True,
     # đánh giá đúng/sai + số ván lưu
     "EVAL_WINDOW": 500, "PERSIST_KEEP": 300,
 }))
@@ -875,7 +879,7 @@ MX_MD5_CFG = TableCfg("max789md5", _hit_env("MXMD5_", {
     # AF: bước 3 bẻ theo WR chế độ (WR chế độ < AF_MODE_BELOW % -> đảo final TÀI<->XỈU)
     "AF_MODE_FLIP": False, "AF_MODE_WINDOW": 9, "AF_MODE_MIN": 7, "AF_MODE_BELOW": 45,
     # AF: bẻ final riêng
-    "AF_FLIP_FINAL": False, "AF_FLIP_FINAL_CT": False, "AF_FLIP_FINAL_CAO": False, "AF_FLIP_FINAL_THAP": False, "AF_FLIP_FINAL_ALL": False,
+    "AF_FLIP_FINAL": False, "AF_FLIP_FINAL_CT": False, "AF_FLIP_FINAL_CAO": False, "AF_FLIP_FINAL_THAP": True, "AF_FLIP_FINAL_ALL": True,
     # đánh giá đúng/sai + số ván lưu
     "EVAL_WINDOW": 500, "PERSIST_KEEP": 300,
 }))
@@ -903,7 +907,7 @@ MX_HU_CFG = TableCfg("max789hu", _hit_env("MXHU_", {
     # AF: bước 3 bẻ theo WR chế độ (WR chế độ < AF_MODE_BELOW % -> đảo final TÀI<->XỈU)
     "AF_MODE_FLIP": False, "AF_MODE_WINDOW": 9, "AF_MODE_MIN": 7, "AF_MODE_BELOW": 45,
     # AF: bẻ final riêng
-    "AF_FLIP_FINAL": False, "AF_FLIP_FINAL_CT": False, "AF_FLIP_FINAL_CAO": False, "AF_FLIP_FINAL_THAP": False, "AF_FLIP_FINAL_ALL": True,
+    "AF_FLIP_FINAL": False, "AF_FLIP_FINAL_CT": False, "AF_FLIP_FINAL_CAO": True, "AF_FLIP_FINAL_THAP": False, "AF_FLIP_FINAL_ALL": True,
     # đánh giá đúng/sai + số ván lưu
     "EVAL_WINDOW": 500, "PERSIST_KEEP": 300,
 }))
@@ -4773,6 +4777,7 @@ _NOFRAME_PREFIX = ("/api/admin", "/tool/autocuoc", "/api/autocuoc", "/autocuoc")
 #                                  (và /api/autocuoc, /autocuoc) sẽ tự chuyển hướng sang link này. Origin của link này luôn được tự thêm vào
 #                                  AUTOBET_ALLOWED_ORIGINS để trang đó gọi được API. Đặt AUTOBET_UI_URL="" để tắt chuyển hướng (quay lại trả 404).
 AB_SERVE_UI = _env_bool("AUTOBET_SERVE_UI", False)
+AB_REDIRECT = _env_bool("AUTOBET_REDIRECT", False)      # 1 = /tool/autocuoc (+ alias) chuyển hướng 302 sang AUTOBET_UI_URL. MẶC ĐỊNH 0 = 404 (không lộ link giao diện / không lộ đường này tồn tại)
 AB_API_PREFIX = "/tool/autocuoc/api/"
 AB_UI_URL = os.environ.get("AUTOBET_UI_URL", "https://toolautocuoclc79.netlify.app/").strip()
 if AB_UI_URL and not AB_UI_URL.lower().startswith(("http://", "https://")):
@@ -5011,6 +5016,40 @@ _lg = "lc79" if _lg == "tele68" else _lg
 KEY_LEGACY_GAME = _lg if _lg in ("all", "sun", "hit", "lc79") else "all"   # game của key cũ chưa có trường game (xem khối CONFIG KEY / ADMIN)
 HWID_REQUIRED = _env_bool("SUNVIW_HWID_REQUIRED", True)
 HWID_TOUCH_SEC = 60                                   # ghi "lần dùng gần nhất" tối đa 1 lần / phút / thiết bị (đỡ ghi file mỗi lần panel poll)
+
+
+# 🛡 QUYỀN ADMIN PHỤ — admin chính tích quyền cho TỪNG admin phụ (tab "Key" -> bấm key admin phụ). Áp dụng ở CẢ panel /api/admin LẪN bot Telegram.
+#    Mặc định (key admin phụ chưa được chỉnh): duyệt đơn nạp · duyệt feedback · broadcast. Muốn thêm quyền nào của admin chính thì tích quyền đó.
+#    KHÔNG cấp được (luôn chỉ admin chính): tạo key admin phụ · phân quyền · sửa thông tin ngân hàng / admin chính của bot · bí mật bot API.
+PERM_CATALOG = (   # id, nhãn, nơi áp dụng, mặc định
+    ("deposit", "Duyệt đơn nạp tiền", "bot", True),
+    ("feedback", "Duyệt feedback", "bot", True),
+    ("broadcast", "Gửi thông báo tới toàn bot (broadcast)", "bot + panel", True),
+    ("gift", "Tạo / xóa gifcode", "bot", False),
+    ("promo", "Tạo / sửa ưu đãi", "bot", False),
+    ("keys_all", "Quản lý MỌI key người dùng (không chỉ key mình tạo)", "panel", False),
+    ("devices", "Duyệt / ban thiết bị vào panel HTML", "panel", False),
+    ("offserver", "Bật / tắt server từng bàn", "panel", False),
+    ("notice", "Gửi thông báo tới tool", "panel", False),
+    ("revenue", "Xem doanh thu", "panel", False),
+    ("autocuoc", "Xem / dừng auto cược", "panel", False),
+    ("botcfg", "Cấu hình bot (game, giá, link, CSKH, box...)", "panel", False),
+)
+PERM_IDS = tuple(p[0] for p in PERM_CATALOG)
+PERM_DEFAULT = tuple(p[0] for p in PERM_CATALOG if p[3])
+
+
+def _sub_perms(rec):
+    """Quyền hiện có của key admin phụ (chưa từng chỉnh = mặc định)."""
+    p = rec.get("perms")
+    if isinstance(p, list):
+        return [x for x in PERM_IDS if x in p]
+    return list(PERM_DEFAULT)
+
+
+def _has_perm(s, perm):
+    """Phiên admin `s` có quyền `perm` không: admin chính luôn có; admin phụ theo danh sách quyền hiện tại (đọc lại mỗi request)."""
+    return bool(s) and (s.get("r") == "main" or perm in (s.get("perms") or ()))
 
 
 def _pw_hash(pw):
@@ -5362,8 +5401,12 @@ WRONG_GAME_MSG = "Key này chỉ dùng cho game"
 
 
 def _own_user_key(s, r):
-    """Admin phụ chỉ động được vào key NGƯỜI DÙNG do chính mình tạo; admin chính động được mọi key."""
-    return s["r"] == "main" or (r.get("type") == "user" and r.get("by") == "sub" and r.get("by_name") == s["n"])
+    """Admin phụ chỉ động được vào key NGƯỜI DÙNG do chính mình tạo (hoặc MỌI key người dùng nếu được cấp quyền keys_all); admin chính động được mọi key."""
+    if s["r"] == "main":
+        return True
+    if r.get("type") != "user":
+        return False
+    return "keys_all" in (s.get("perms") or ()) or (r.get("by") == "sub" and r.get("by_name") == s["n"])
 
 
 # ─ phiên đăng nhập admin (SEC2): token NGẪU NHIÊN 256-bit, server chỉ lưu SHA-256 của nó (không có khoá ký nào để lộ / giả mạo) ─
@@ -5484,7 +5527,7 @@ def _tok_check():
             _sess[sh]["last"] = now
     try:
         if sess["r"] == "main":
-            flask_g._tok_res = {"r": "main", "n": ADMIN_MAIN_NAME, "k": "", "sh": sh}
+            flask_g._tok_res = {"r": "main", "n": ADMIN_MAIN_NAME, "k": "", "sh": sh, "perms": list(PERM_IDS)}
             return flask_g._tok_res
         if sess["r"] == "sub":
             hw, alts, hfresh = req_hw_ids()
@@ -5504,7 +5547,7 @@ def _tok_check():
                                 _kv_save(d)
                             except OSError:
                                 pass
-                        flask_g._tok_res = {"r": "sub", "n": sess["n"], "k": sess["k"], "sh": sh}
+                        flask_g._tok_res = {"r": "sub", "n": sess["n"], "k": sess["k"], "sh": sh, "perms": _sub_perms(rec)}
                         return flask_g._tok_res
     except Exception:  # noqa: BLE001
         pass
@@ -5549,16 +5592,8 @@ def _key_price(days):
 
 
 def _rev_record(d, k, rec, now):
-    """Ghi 1 key người dùng VỪA kích hoạt vào sổ doanh thu d["rev"] (nơi gọi tự _kv_save). Sổ độc lập với danh sách key -> xóa key / dọn key hết hạn KHÔNG làm mất doanh thu."""
-    if rec.get("type") != "user":
-        return
-    rv = d.setdefault("rev", {})
-    if not isinstance(rv, dict):
-        rv = d["rev"] = {}
-    rv[k] = {"t": int(now), "g": _key_game(rec), "d": int(rec.get("days") or 0), "p": _key_price(rec.get("days"))}
-    cut = now - REV_KEEP_SEC
-    for kk in [x for x, v in rv.items() if int((v or {}).get("t") or 0) < cut]:
-        del rv[kk]
+    """(ĐÃ TẮT) Trước đây ghi doanh thu khi key được kích hoạt. Nay doanh thu CHỈ tính key bán qua bot Telegram (xem _bot_ledger_add) -> hàm này không làm gì."""
+    return
 
 
 def _vn_day_start(now):
@@ -5575,38 +5610,36 @@ def _vn_week_start(now):
 
 
 def _revenue_calc(d, now):
-    """Doanh thu tính từ lúc KÍCH HOẠT key, tách theo game:
-         · \"ngay\"  = HÔM NAY: từ 00:00 hôm nay (giờ VN) tới giờ — qua 00:00 ngày mới là về 0 (KHÔNG phải cứ đủ 24 giờ)
-         · \"tuan\"  = TUẦN NÀY: từ 00:00 thứ Hai (giờ VN) tới giờ — sang thứ Hai mới là về 0
-         · \"thang\" = 30 ngày gần nhất (cửa sổ trượt như cũ)
-       Mỗi cửa sổ trả thêm \"tu\" (mốc bắt đầu, epoch) và \"den\" (mốc reset kế tiếp, None với tháng) để trang admin tự làm mới khi qua mốc.
-       Nguồn = sổ d[\"rev\"] + các key người dùng ĐÃ kích hoạt từ trước bản này mà chưa có trong sổ (tính theo giá hiện tại, thời điểm = lúc kích hoạt; key cũ không có trường act = lúc tạo)."""
-    ent = {}
-    for k, v in (d.get("rev") or {}).items():
-        if isinstance(v, dict):
-            ent[k] = (int(v.get("t") or 0), str(v.get("g") or "all"), int(v.get("d") or 0), int(v.get("p") or 0))
-    for k, r in (d.get("keys") or {}).items():
-        if k in ent or r.get("type") != "user" or not _activated(r):
-            continue
-        t = int(r.get("act") or r.get("created") or 0)
-        if t:
-            ent[k] = (t, _key_game(r), int(r.get("days") or 0), _key_price(r.get("days")))
+    """Doanh thu CHỈ từ key khách mua qua bot Telegram (số tiền khách trả), tách theo game:
+         · "ngay"  = HÔM NAY: từ 00:00 hôm nay (giờ VN) — qua 00:00 là về 0
+         · "tuan"  = TUẦN NÀY: từ 00:00 thứ Hai (giờ VN)
+         · "thang" = 30 ngày gần nhất (hôm nay + 29 ngày trước)
+       Key tạo ở panel admin + key tặng (gifcode) KHÔNG tính. Mỗi cửa sổ có thêm "tu" / "den" để trang admin tự làm mới khi qua mốc."""
     ds, ws = _vn_day_start(now), _vn_week_start(now)
-    wins = (("ngay", ds, ds + 86400), ("tuan", ws, ws + 7 * 86400), ("thang", int(now) - 30 * 86400, None))
-    games = list(KEY_GAMES) + ["all"] + [g for g in _KEY_DEAD_GAMES if any(e[1] == g for e in ent.values())]   # game đã gỡ chỉ hiện khi còn doanh thu cũ
-    out = {w: {"tu": t0, "den": t1, "tong": 0, "so_key": 0, "chua_co_gia": 0, "game": {g: {"tien": 0, "so_key": 0} for g in games}} for w, t0, t1 in wins}
-    for t, g, days, price in ent.values():
-        g = g if g in games else "all"
-        for w, t0, _t1 in wins:
-            if t0 <= t <= now + 60:
-                o = out[w]
-                if price > 0:
-                    o["tong"] += price
-                    o["so_key"] += 1
-                    o["game"][g]["tien"] += price
-                    o["game"][g]["so_key"] += 1
-                else:
-                    o["chua_co_gia"] += 1
+    wins = (("ngay", ds, ds + 86400), ("tuan", ws, ws + 7 * 86400), ("thang", _vn_day_start(int(now) - 29 * 86400), None))
+    games = list(BOT_GAMES)
+    out = {w: {"tu": t0, "den": t1, "tong": 0, "so_key": 0, "chua_co_gia": 0, "key_tang": 0,
+               "game": {g: {"tien": 0, "so_key": 0, "key_tang": 0} for g in games}} for w, t0, t1 in wins}
+    for day, per in (((d.get("bot") or {}).get("days")) or {}).items():
+        try:
+            t = _calendar.timegm(time.strptime(day, "%Y%m%d")) - VN_UTC_OFFSET
+        except (ValueError, OverflowError):
+            continue
+        if not isinstance(per, dict):
+            continue
+        for g, e in per.items():
+            if g not in games or not isinstance(e, dict):
+                continue
+            for w, t0, t1 in wins:
+                if t >= t0 and (t1 is None or t < t1):
+                    o = out[w]
+                    tien, n, tang = int(e.get("t") or 0), int(e.get("n") or 0), int(e.get("g") or 0)
+                    o["tong"] += tien
+                    o["so_key"] += n
+                    o["key_tang"] += tang
+                    o["game"][g]["tien"] += tien
+                    o["game"][g]["so_key"] += n
+                    o["game"][g]["key_tang"] += tang
     return out
 
 
@@ -5833,7 +5866,7 @@ def api_panel_status():
     if _panel_banned(hw, alts, hfresh, client_ip()):
         abort(404)                                      # bị ban -> giả như trang không tồn tại
     if not hw:
-        return _json({"ok": False, "status": "error", "loi": "Thiếu mã thiết bị (HWID) — hãy mở panel bằng trình duyệt hoặc gửi header X-HWID."}, 400)
+        abort(404)                                      # không có HWID = không phải panel thật -> 404 (không lộ đường này tồn tại)
     if not _rate_ok(f"ps:{hw}:{client_ip()}", 90):
         return _too_many()
     st = _panel_access(hw, alts, hfresh, client_ip(), request.headers.get("User-Agent", ""), bind=True)
@@ -6086,8 +6119,9 @@ def api_admin_offserver():
     s, err = _need_admin()
     if err:
         return err
-    if s["r"] != "main":
-        return _json({"ok": False, "loi": "chi admin chinh moi bat / tat duoc off server"}, 403)
+    if not _has_perm(s, "offserver"):
+        _audit("perm_denied", role=s["r"], perm="offserver")
+        return _json({"ok": False, "loi": "khong co quyen off server"}, 403)
     if request.method == "POST":
         b = request.get_json(silent=True) or {}
         if not isinstance(b.get("off"), bool):
@@ -6228,9 +6262,9 @@ def _nt_need_main():
     s, err = _need_admin()
     if err:
         return None, err
-    if s["r"] != "main":
+    if not _has_perm(s, "notice"):
         _audit("notice_denied", role=s["r"])
-        return None, _json({"ok": False, "loi": "chi admin chinh moi dung duoc thong bao"}, 403)
+        return None, _json({"ok": False, "loi": "khong co quyen thong bao"}, 403)
     return s, None
 
 
@@ -6459,15 +6493,28 @@ def api_admin_login():
             if not hw:
                 return _json({"ok": False, "kind": "sub", "loi": "Thiếu mã thiết bị (HWID) — hãy mở trang admin bằng trình duyệt, hoặc tool phải gửi header X-HWID."}, 400)
             fresh = False
-            if not rec.get("owner"):                     # key admin phụ chưa ai dùng -> nhập username, gắn username + thiết bị đầu tiên
-                if not str(b.get("username") or "").strip():
-                    return _json({"ok": False, "kind": "sub", "need_username": True, "loi": "Nhập username để kích hoạt. Key sẽ gắn với username này và thiết bị (HWID) bạn đang dùng."})
+            if not rec.get("owner"):                     # key admin phụ chưa ai dùng -> nhập username + Chat ID Telegram, gắn với thiết bị đầu tiên
+                if not str(b.get("username") or "").strip() or not str(b.get("tg") or "").strip():
+                    return _json({"ok": False, "kind": "sub", "need_username": True, "need_tg": True, "loi": "Nhập username VÀ Chat ID Telegram của bạn để kích hoạt (lấy Chat ID bằng lệnh /id trong bot). Key sẽ gắn với username, Chat ID và thiết bị (HWID) bạn đang dùng."})
                 name = _clean_username(b.get("username"))
                 if not name:
                     return _json({"ok": False, "kind": "sub", "need_username": True, "loi": "Username 2-20 ký tự (chữ, số, dấu cách . _ -), không dùng 'admin'."}, 400)
                 if any(r.get("type") == "sub" and str(r.get("owner") or "").lower() == name.lower() for r in d["keys"].values()):
                     return _json({"ok": False, "kind": "sub", "need_username": True, "loi": "Username này đã có người dùng, chọn tên khác."}, 400)
-                rec["owner"], rec["bound"] = name, now
+                tg_new = _clean_tg(b.get("tg"))
+                if tg_new is None:
+                    return _json({"ok": False, "kind": "sub", "need_username": True, "need_tg": True, "loi": "Chat ID Telegram không hợp lệ (5-15 chữ số). Gõ /id trong bot để lấy."}, 400)
+                if _tg_taken(d, tg_new, k):
+                    return _json({"ok": False, "kind": "sub", "need_username": True, "need_tg": True, "loi": "Chat ID này đã gắn với admin khác."}, 400)
+                rec["owner"], rec["bound"], rec["tg"] = name, now, tg_new
+                fresh = True
+            elif not rec.get("tg"):                      # key cũ (tạo trước bản có Chat ID) -> bắt bổ sung Chat ID 1 lần
+                if not str(b.get("tg") or "").strip():
+                    return _json({"ok": False, "kind": "sub", "need_tg": True, "loi": "Key này chưa có Chat ID Telegram — nhập Chat ID của bạn (lấy bằng /id trong bot) để dùng quyền admin phụ ở bot."})
+                tg_new = _clean_tg(b.get("tg"))
+                if tg_new is None or _tg_taken(d, tg_new, k):
+                    return _json({"ok": False, "kind": "sub", "need_tg": True, "loi": "Chat ID không hợp lệ hoặc đã gắn với admin khác."}, 400)
+                rec["tg"] = tg_new
                 fresh = True
             ok, err, ch = _dev_use(rec, hw, ip, ua, now, alts, hfresh)  # thiết bị đã gắn -> cho vào · chưa gắn mà còn chỗ -> gắn thêm · hết chỗ -> chặn tới khi admin chính reset
             if not ok:
@@ -6483,11 +6530,11 @@ def api_admin_login():
             name = rec["owner"]
             _rl_reset(ip)
             return _json({"ok": True, "kind": "sub", "role": "sub", "name": name, "dev": len(rec.get("devs") or {}), "max_dev": _max_dev(rec),
-                          **_tok_pair("sub", name, k, hw)})
+                          "perms": _sub_perms(rec), "tg": rec.get("tg"), **_tok_pair("sub", name, k, hw)})
     if raw and ADMIN_PASS_HASH and hmac.compare_digest(_pw_hash(raw), ADMIN_PASS_HASH):   # không phải key trong file -> thử mật khẩu admin chính
         _rl_reset(ip)
         _audit("login_main_ok")
-        return _json({"ok": True, "kind": "main", "role": "main", "name": ADMIN_MAIN_NAME, **_tok_pair("main", ADMIN_MAIN_NAME)})
+        return _json({"ok": True, "kind": "main", "role": "main", "name": ADMIN_MAIN_NAME, "perms": list(PERM_IDS), **_tok_pair("main", ADMIN_MAIN_NAME)})
     _rl_fail(ip)
     _audit("login_fail")
     return _json({"ok": False, "kind": "none", "loi": "Không có key nào khớp (hoặc sai mật khẩu admin chính)."}, 403)
@@ -6506,6 +6553,17 @@ def api_admin_logout():
 def _need_admin():
     s = _tok_check()
     return s, (None if s else _json({"ok": False, "loi": "chua dang nhap / phien het han"}, 401))
+
+
+def _need_perm(perm):
+    """Phiên admin hợp lệ VÀ có quyền `perm` (admin chính luôn có). Thiếu quyền -> 403 + ghi audit."""
+    s, err = _need_admin()
+    if err:
+        return None, err
+    if not _has_perm(s, perm):
+        _audit("perm_denied", role=s["r"], perm=perm)
+        return None, _json({"ok": False, "loi": "khong co quyen"}, 403)
+    return s, None
 
 
 @app.route("/api/admin/keys")
@@ -6533,25 +6591,27 @@ def api_admin_keys():
                      "dung_boi": r.get("owner"), "da_tao": made.get(r.get("owner"), 0) if r.get("type") == "sub" else None,
                      "max_dev": _max_dev(r), "so_dev": len(devs), "dung_luc": r.get("last"), "ip_cuoi": r.get("last_ip"), "thiet_bi": tb,
                      "game": _key_game(r) if r.get("type") == "user" else None,                                   # sun | hit | all (key cũ chưa gán game)
-                     "game_cu": r.get("type") == "user" and str(r.get("game") or "").lower() not in KEY_GAMES + _KEY_DEAD_GAMES})   # True = key tạo trước khi có chia game
+                     "game_cu": r.get("type") == "user" and str(r.get("game") or "").lower() not in KEY_GAMES + _KEY_DEAD_GAMES,   # True = key tạo trước khi có chia game
+                     "perms": (_sub_perms(r) if r.get("type") == "sub" else None), "tg": r.get("tg")})
     rows.sort(key=lambda x: -(x["tao_luc"] or 0))
     return _json({"ok": True, "role": s["r"], "name": s["n"], "ngay": list(KEY_DAYS), "so_tb": list(KEY_DEV_OPTIONS),
-                  "games": [{"id": g, "ten": KEY_GAME_LABEL[g]} for g in KEY_GAMES], "keys": rows})
+                  "games": [{"id": g, "ten": KEY_GAME_LABEL[g]} for g in KEY_GAMES], "keys": rows,
+                  "my_perms": list(s.get("perms") or []), "perm_catalog": [{"id": p[0], "ten": p[1], "noi": p[2], "mac_dinh": p[3]} for p in PERM_CATALOG]})
 
 
 @app.route("/api/admin/revenue")
 def api_admin_revenue():
-    """Doanh thu tự tính theo giá KEY_PRICE khi key được kích hoạt (Sun · Hit · LC79): HÔM NAY (reset 00:00 giờ VN) / TUẦN NÀY (reset 00:00 thứ Hai) / 30 ngày. CHỈ ADMIN CHÍNH — admin phụ và key người dùng đều bị từ chối."""
-    s, err = _need_admin()
+    """Doanh thu bán key qua bot Telegram: HÔM NAY (reset 00:00 giờ VN) / TUẦN NÀY (reset 00:00 thứ Hai) / 30 ngày. Cần quyền revenue (admin chính luôn có)."""
+    s, err = _need_perm("revenue")
     if err:
         return err
-    if s["r"] != "main":
-        return _json({"ok": False, "loi": "chi admin chinh moi xem duoc doanh thu"}, 403)
     now = int(time.time())
     with _kv_lock:
         d = _kv_load()
+    rc = [{"t": x.get("t"), "tg": x.get("tg"), "g": x.get("g"), "d": x.get("d"), "p": x.get("p"), "s": x.get("s"), "k": x.get("k")}
+          for x in (((d.get("bot") or {}).get("recent")) or [])[:60]]
     return _json({"ok": True, "don_vi": "VND", "bang_gia": {str(k): v for k, v in sorted(KEY_PRICE.items())},
-                  "games": [{"id": g, "ten": KEY_GAME_LABEL[g]} for g in KEY_GAMES], "doanh_thu": _revenue_calc(d, now)})
+                  "games": [{"id": g, "ten": KEY_GAME_LABEL[g]} for g in BOT_GAMES], "doanh_thu": _revenue_calc(d, now), "gan_day": rc})
 
 
 @app.route("/api/admin/keys/create", methods=["POST"])
@@ -6737,7 +6797,781 @@ def api_admin_keys_add_time():
     return _json({"ok": True, "da_cong": len(out), "bo_qua": skipped, "giay": secs, "ket_qua": out})
 
 
-# ─ DUYỆT THIẾT BỊ VÀO PANEL /api/html — CHỈ ADMIN CHÍNH (xem khối "DUYỆT THIẾT BỊ VÀO PANEL" ở trên) ─
+# ═══════════════════════════════════════════════════════════════════════════
+#  🤖  BOT TELEGRAM BÁN KEY  —  API NỘI BỘ (ẨN) · CẤU HÌNH BOT · DOANH THU TELE · BROADCAST  —  CHỈNH Ở ĐÂY
+# ═══════════════════════════════════════════════════════════════════════════
+#   Bot Telegram (bot.py, chạy riêng) MUA KEY qua API này. Key do CHÍNH tool này sinh (cùng hệ key / HWID / hạn như key tạo ở /api/admin).
+#   🔒 BẢO MẬT — vì sao không ai gọi / dò ra được:
+#      · Chỉ bật khi đặt SUNVIW_BOT_SECRET (>= 24 ký tự, dài + ngẫu nhiên). Không đặt = MỌI đường bot đều 404 như không tồn tại.
+#      · Đường dẫn BÍ MẬT suy ra từ secret (HMAC) — /<slug>/<op>. Đường nội bộ /__bot/* gọi trực tiếp từ ngoài -> 404.
+#      · MỌI request phải ký HMAC-SHA256(secret, METHOD\nOP\nTS\nNONCE\nSHA256(body)) trong X-B-Ts / X-B-Nonce / X-B-Sig: lệch giờ > SUNVIW_BOT_SKEW (90s),
+#        nonce dùng lại (replay), sai chữ ký, sai IP (nếu đặt SUNVIW_BOT_IPS) -> 404 (KHÔNG phân biệt lý do) + cộng điểm khoá IP (cùng cơ chế chống dò quét).
+#      · Phản hồi cũng được ký (X-B-Rsig) -> bot từ chối phản hồi giả (kể cả khi ai đó chen giữa đường truyền).
+#      · Mua key có mã đơn (ref) duy nhất: gọi lại cùng ref KHÔNG tạo key mới (bot gặp lỗi mạng cứ thử lại an toàn, không trùng key / không mất key).
+#      · Giá do SERVER giữ (panel chỉnh) — bot gửi giá nó thấy, lệch giá -> từ chối. Game đang OFF (bất kỳ bàn nào của game) / tắt bán -> từ chối.
+#   💰 Doanh thu: CHỈ tính key khách mua qua bot (đúng số tiền khách trả). Key tạo ở panel / key tặng (gifcode) KHÔNG tính vào doanh thu.
+#   Dữ liệu cấu hình bot (giá, link game, CSKH, box...) lưu ở BOT_CFG_PATH (env SUNVIW_BOT_PATH, cùng Volume); sổ doanh thu nằm trong file key (nguyên tử với việc tạo key).
+#   Biến môi trường: SUNVIW_BOT_SECRET · SUNVIW_BOT_IPS=ip1,ip2 (tuỳ chọn, khuyên dùng nếu bot có IP cố định) · SUNVIW_BOT_SKEW · SUNVIW_BOT_PATH
+import calendar as _calendar  # noqa: E402
+
+BOT_SECRET = os.environ.get("SUNVIW_BOT_SECRET", "").strip()
+BOT_ENABLED = len(BOT_SECRET) >= 24
+BOT_CFG_PATH = os.environ.get("SUNVIW_BOT_PATH", _data_path("sunviw_bot.json"))
+BOT_SKEW = max(10, _env_num("SUNVIW_BOT_SKEW", 90, int))
+BOT_IPS = frozenset(x for x in (_ip_parse(v) for v in os.environ.get("SUNVIW_BOT_IPS", "").replace(";", ",").split(",")) if x)
+BOT_GAMES = ("sun", "hit", "lc79", "betvip", "max789", "autolc")      # game bán được qua bot (thứ tự hiện trong bot)
+BOT_RECENT_MAX = 150                                                    # số giao dịch gần nhất giữ để hiện ở panel
+BOT_BC_MAX_TEXT = 3500
+BOT_BC_KEEP = 30
+BOT_BC_STALE = 15 * 60                                                  # broadcast "đang gửi" quá lâu mà bot không báo xong -> coi là gián đoạn
+
+
+def _bot_slug():
+    if not BOT_ENABLED:
+        return None
+    return "b" + hmac.new(BOT_SECRET.encode("utf-8"), b"sunviw-bot-path-v1", hashlib.sha256).hexdigest()[:31]
+
+
+BOT_SLUG = _bot_slug()
+if BOT_ENABLED:
+    print("[SEC] Bot Telegram API BAT (duong bi mat suy ra tu SUNVIW_BOT_SECRET, moi request ky HMAC, sai -> 404)" + (f" · chi nhan IP {sorted(BOT_IPS)}" if BOT_IPS else " · chua gioi han IP (dat SUNVIW_BOT_IPS neu bot co IP co dinh)"), file=sys.stderr)
+else:
+    print("[SEC] SUNVIW_BOT_SECRET chua dat / ngan (< 24 ky tu) -> bot Telegram API TAT (moi duong bot = 404). Goi y secret: " + secrets.token_urlsafe(36), file=sys.stderr)
+
+
+class _BotMask:
+    """Lớp WSGI NGOÀI CÙNG: /<BOT_SLUG>/<op> -> /__bot/<op> (đánh dấu environ['sunviw.bot'], client không giả được vì header HTTP luôn mang tiền tố HTTP_);
+    /__bot* gọi trực tiếp từ ngoài -> 404."""
+
+    def __init__(self, inner):
+        self.inner = inner
+        self.pfx = ("/" + BOT_SLUG + "/") if BOT_SLUG else None
+
+    def __call__(self, environ, start_response):
+        p = environ.get("PATH_INFO", "")
+        environ.pop("sunviw.bot", None)
+        if self.pfx and p.startswith(self.pfx):
+            op = p[len(self.pfx):]
+            if re.fullmatch(r"[a-z_]{1,24}", op):
+                environ["PATH_INFO"] = "/__bot/" + op
+                environ["sunviw.bot"] = True
+            else:
+                environ["PATH_INFO"] = "/__nf__"
+        elif p.lower().startswith("/__bot"):
+            environ["PATH_INFO"] = "/__nf__"
+        return self.inner(environ, start_response)
+
+
+app.wsgi_app = _BotMask(app.wsgi_app)
+
+# ─ lưu cấu hình bot (giá / link game / CSKH / box / broadcast) ─
+_bc_lock = threading.RLock()
+_bc_cache = {"sig": None, "d": None}
+_bot_nonces = {}
+_bot_nlock = threading.Lock()
+_bot_seen = {"t": 0, "ip": ""}
+
+
+def _bcfg_default():
+    return {"v": 1, "games": {}, "cfg": {}, "bc": []}
+
+
+def _bcfg_load():
+    """Cấu hình bot (cache theo mtime / size / inode). Chỉ ĐỌC — muốn sửa dùng _bcfg_update. File hỏng -> giữ bản hợp lệ gần nhất."""
+    with _bc_lock:
+        try:
+            stt = os.stat(BOT_CFG_PATH)
+            sig = (stt.st_mtime_ns, stt.st_size, stt.st_ino)
+        except OSError:
+            return _bc_cache["d"] or _bcfg_default()
+        if _bc_cache["sig"] == sig and _bc_cache["d"] is not None:
+            return _bc_cache["d"]
+        try:
+            with open(BOT_CFG_PATH, "r", encoding="utf-8") as f:
+                d = json.load(f)
+            if not isinstance(d, dict):
+                raise ValueError("bot cfg")
+            for k in ("games", "cfg"):
+                if not isinstance(d.get(k), dict):
+                    d[k] = {}
+            if not isinstance(d.get("bc"), list):
+                d["bc"] = []
+        except Exception:  # noqa: BLE001
+            d = _bc_cache["d"] or _bcfg_default()
+        _bc_cache.update(sig=sig, d=d)
+        return d
+
+
+def _bcfg_update(fn):
+    """Đọc-sửa-ghi nguyên tử: fn(d) sửa bản sao, rồi ghi file tạm + đổi tên. Ném OSError nếu không ghi được."""
+    with _bc_lock:
+        d = json.loads(json.dumps(_bcfg_load()))
+        res = fn(d)
+        tmp = BOT_CFG_PATH + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(d, f, ensure_ascii=False)
+        os.replace(tmp, BOT_CFG_PATH)
+        _bc_cache.update(sig=None, d=None)
+        return res
+
+
+# ─ kiểm tra giá trị cấu hình (mọi thứ vào từ panel / bot đều đi qua đây) ─
+BOT_CFG_SPEC = {                  # trường: (kiểu, CHỈ ADMIN CHÍNH sửa được)
+    "bot_name": ("text40", False), "cskh_username": ("uname", False), "cskh_id": ("digits", False),
+    "min_deposit": ("money", False), "max_deposit": ("money", False), "bot_max_dev": ("devs", False),
+    "feedback_chat": ("chat", False), "feedback_thread": ("thread", False), "feedback_mask": ("bool", False),
+    "notify_chat": ("chat", False), "notify_thread": ("thread", False),
+    "admin_ids": ("ids", True), "bank_name": ("text40", True), "bank_code": ("bankcode", True),
+    "bank_account": ("bankacc", True), "bank_owner": ("text60", True), "use_dynamic_qr": ("bool", True),
+}
+_BOT_NO_VALUE = object()
+
+
+def _line_clean(s, n):
+    s = _nt_clean_text(s) if isinstance(s, str) else ""
+    return re.sub(r"\s+", " ", s).strip()[:n]
+
+
+def _bcfg_clean(field, v):
+    """-> giá trị hợp lệ, '' (xoá = bot dùng config.env) hoặc _BOT_NO_VALUE nếu sai."""
+    kind = BOT_CFG_SPEC[field][0]
+    if kind == "bool":
+        if isinstance(v, bool):
+            return v
+        t = str(v).strip().lower()
+        return True if t in ("1", "true", "on") else (False if t in ("0", "false", "off", "") else _BOT_NO_VALUE)
+    if kind in ("money", "devs"):
+        if v is None or (isinstance(v, str) and not v.strip()):
+            return ""                                   # ô trống = xoá (bot dùng config.env)
+        if isinstance(v, bool):
+            return _BOT_NO_VALUE
+        try:
+            n = int(str(v).strip())
+        except ValueError:
+            return _BOT_NO_VALUE
+        if kind == "money":
+            return n if 1000 <= n <= 10**10 else _BOT_NO_VALUE
+        return n if n in KEY_DEV_OPTIONS else _BOT_NO_VALUE
+    if kind == "ids":
+        parts = v if isinstance(v, (list, tuple)) else re.split(r"[,;\s]+", str(v or ""))
+        out = []
+        for x in parts:
+            x = str(x).strip()
+            if not x:
+                continue
+            n = _clean_tg(x)
+            if n is None:
+                return _BOT_NO_VALUE
+            if n not in out:
+                out.append(n)
+        return out[:10]
+    s = str(v if v is not None else "").strip()
+    if s == "":
+        return ""
+    if kind == "text40":
+        return _line_clean(s, 40)
+    if kind == "text60":
+        return _line_clean(s, 60)
+    if kind == "uname":
+        s = s.lstrip("@")
+        return s if re.fullmatch(r"[A-Za-z0-9_]{5,32}", s) else _BOT_NO_VALUE
+    if kind == "digits":
+        return s if re.fullmatch(r"[0-9]{5,15}", s) else _BOT_NO_VALUE
+    if kind == "bankcode":
+        return s.upper() if re.fullmatch(r"[A-Za-z0-9]{2,12}", s) else _BOT_NO_VALUE
+    if kind == "bankacc":
+        return s if re.fullmatch(r"[0-9A-Za-z]{4,24}", s) else _BOT_NO_VALUE
+    if kind == "chat":
+        return s if (re.fullmatch(r"@[A-Za-z0-9_]{5,32}", s) or re.fullmatch(r"-?[0-9]{5,20}", s)) else _BOT_NO_VALUE
+    if kind == "thread":
+        return s if re.fullmatch(r"[0-9]{1,12}", s) else _BOT_NO_VALUE
+    return _BOT_NO_VALUE
+
+
+def _clean_url(u):
+    """Link game: chỉ http(s), không khoảng trắng / ký tự lạ, tối đa 300 ký tự. '' = xoá. Sai -> None."""
+    u = str(u or "").strip()
+    if not u:
+        return ""
+    if len(u) > 300 or not re.fullmatch(r"https?://[^\s<>\"'`\\]+", u, re.I):
+        return None
+    p = urllib.parse.urlsplit(u)
+    return u if p.scheme.lower() in ("http", "https") and p.netloc and "@" not in p.netloc else None
+
+
+# ─ trạng thái game / giá ─
+def _bot_game_tables(g):
+    if g == "autolc":                                   # auto cược LC dùng CẢ 2 bàn LC: 1 bàn OFF là ngừng bán
+        return OFFSRV_GAME_TABLES["lc79"]
+    return OFFSRV_GAME_TABLES.get(g, ())
+
+
+def _bot_price(games_cfg, g, days):
+    """Giá gốc (VNĐ) của gói `days` ngày game `g`: panel đã chỉnh thì lấy giá đó, chưa thì KEY_PRICE mặc định. 0 = không bán gói này."""
+    pr = (games_cfg.get(g) or {}).get("prices") or {}
+    v = pr.get(str(days))
+    if v is None:
+        v = KEY_PRICE.get(days, 0)
+    try:
+        return max(0, int(v))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _bot_games_view(bd=None):
+    """Danh sách game cho bot: online = đang bán + KHÔNG bàn nào của game bị OFF SERVER + có ít nhất 1 gói có giá."""
+    bd = bd or _bcfg_load()
+    cg = bd.get("games") or {}
+    out = []
+    for g in BOT_GAMES:
+        gc = cg.get(g) or {}
+        sell = gc.get("sell", True) is not False
+        offs = [OFFSRV_LABEL[t] for t in _bot_game_tables(g) if offsrv_table_off(t)]
+        pk = [{"days": dd, "price": p} for dd in KEY_DAYS for p in (_bot_price(cg, g, dd),) if p > 0]
+        out.append({"code": g, "name": (gc.get("name") or KEY_GAME_LABEL[g])[:30], "sell": sell, "off_tables": offs,
+                    "online": bool(sell and not offs and pk), "link": gc.get("url") or "", "packages": pk})
+    return out
+
+
+def _bot_main_ids(bd=None):
+    return list(((bd or _bcfg_load()).get("cfg") or {}).get("admin_ids") or [])
+
+
+def _clean_tg(v):
+    s = str(v if v is not None else "").strip()
+    if not re.fullmatch(r"[0-9]{5,15}", s):
+        return None
+    n = int(s)
+    return n if 0 < n < 2 ** 52 else None
+
+
+def _tg_taken(d, tg, exclude_key=None):
+    """Chat ID này đã gắn với admin phụ khác / trùng admin chính chưa."""
+    if tg in _bot_main_ids():
+        return True
+    return any(r.get("type") == "sub" and k != exclude_key and r.get("tg") == tg for k, r in d["keys"].items())
+
+
+def _bot_subs(d, now):
+    out = []
+    for k, r in d["keys"].items():
+        if r.get("type") == "sub" and r.get("owner") and r.get("tg") and not _is_expired(r, now):
+            out.append({"tg": int(r["tg"]), "name": str(r["owner"]), "perms": _sub_perms(r)})
+    return out
+
+
+# ─ xác thực request của bot ─
+def _bot_deny(why):
+    ip = client_ip()
+    _pg_strike(ip, 4)                                   # sai chữ ký / đường -> cộng điểm khoá IP (cùng cơ chế chống dò quét)
+    if _rate_ok(f"botaudit:{ip}", 5):
+        _audit("bot_deny", why=why)
+    abort(404)
+
+
+def _bot_auth(op):
+    """Hợp lệ -> True. MỌI lỗi (chưa bật, sai đường, sai IP, sai định dạng, lệch giờ, sai chữ ký, lặp nonce) -> 404 y hệt đường không tồn tại."""
+    if not BOT_ENABLED or not request.environ.get("sunviw.bot"):
+        abort(404)
+    ip = client_ip()
+    if BOT_IPS and ip not in BOT_IPS:
+        _bot_deny("ip")
+    ts = request.headers.get("X-B-Ts", "")
+    nonce = request.headers.get("X-B-Nonce", "")
+    sig = request.headers.get("X-B-Sig", "")
+    if not (ts.isdigit() and len(ts) <= 12 and re.fullmatch(r"[A-Za-z0-9_-]{16,64}", nonce) and re.fullmatch(r"[0-9a-f]{64}", sig)):
+        _bot_deny("fmt")
+    now = time.time()
+    if abs(now - int(ts)) > BOT_SKEW:
+        _bot_deny("skew")
+    msg = "\n".join((request.method, op, ts, nonce, hashlib.sha256(request.get_data(cache=True)).hexdigest()))
+    if not hmac.compare_digest(hmac.new(BOT_SECRET.encode("utf-8"), msg.encode("utf-8"), hashlib.sha256).hexdigest(), sig):
+        _bot_deny("sig")
+    with _bot_nlock:
+        if len(_bot_nonces) > 5000:
+            for k in [k for k, e in _bot_nonces.items() if e < now]:
+                del _bot_nonces[k]
+        if nonce in _bot_nonces:
+            _bot_deny("replay")
+        _bot_nonces[nonce] = now + 2 * BOT_SKEW + 30
+    flask_g._bot_nonce = nonce
+    _bot_seen["t"], _bot_seen["ip"] = int(now), ip
+    return True
+
+
+def _bot_json(obj, status=200):
+    body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
+    r = Response(body, status=status, content_type="application/json; charset=utf-8")
+    n = getattr(flask_g, "_bot_nonce", "")
+    r.headers["X-B-Rsig"] = hmac.new(BOT_SECRET.encode("utf-8"), ("R\n" + n + "\n" + hashlib.sha256(body).hexdigest()).encode("utf-8"), hashlib.sha256).hexdigest()
+    return r
+
+
+# ─ sổ doanh thu Tele (nằm trong file key -> nguyên tử với việc tạo key) ─
+def _bot_ledger_add(d, now, game, paid, src, ref, tg, days, key):
+    b = d.get("bot")
+    if not isinstance(b, dict):
+        b = d["bot"] = {}
+    dd = b.setdefault("days", {})
+    day = time.strftime("%Y%m%d", time.gmtime(now + VN_UTC_OFFSET))
+    e = dd.setdefault(day, {}).setdefault(game, {"t": 0, "n": 0, "g": 0})
+    if src == "buy":
+        e["t"] += int(paid)
+        e["n"] += 1
+    else:
+        e["g"] += 1
+    cut = time.strftime("%Y%m%d", time.gmtime(now + VN_UTC_OFFSET - REV_KEEP_SEC))
+    for x in [x for x in dd if x < cut]:
+        del dd[x]
+    rc = b.setdefault("recent", [])
+    rc.insert(0, {"t": now, "ref": ref, "tg": tg, "g": game, "d": days, "p": int(paid), "s": src, "k": key})
+    del rc[BOT_RECENT_MAX:]
+
+
+def _bot_buy_resp(rec, key, game, bd, dup):
+    gv = next(g for g in _bot_games_view(bd) if g["code"] == game)
+    return {"ok": True, "key": key, "game": game, "game_name": gv["name"], "days": int(rec.get("days") or 0), "link": gv["link"],
+            "price": int(rec.get("bp") or 0), "dup": dup, "from_use": bool(KEY_START_ON_ACTIVATE)}
+
+
+# ─ các thao tác bot gọi (mọi thứ khác = 404) ─
+def _bot_op_catalog(b):
+    bd = _bcfg_load()
+    now = int(time.time())
+    with _kv_lock:
+        d = _kv_load()
+    cfg = {k: v for k, v in (bd.get("cfg") or {}).items() if k in BOT_CFG_SPEC}
+    queued = [{"id": x["id"], "text": x["text"], "by": x.get("by", "")} for x in bd.get("bc", []) if x.get("st") == "queued"][:3]
+    return {"ok": True, "ts": now, "games": _bot_games_view(bd), "cfg": cfg,
+            "admins": {"main": _bot_main_ids(bd), "subs": _bot_subs(d, now)}, "bc": queued,
+            "perms": {"ids": list(PERM_IDS), "default": list(PERM_DEFAULT)}}
+
+
+def _bot_op_seed(b):
+    """Bot gửi cấu hình đang dùng (config.env) lần đầu: CHỈ điền trường CHƯA có trong panel (không ghi đè)."""
+    src = b.get("cfg") if isinstance(b.get("cfg"), dict) else {}
+    added = []
+
+    def fn(d):
+        for f in BOT_CFG_SPEC:
+            if f in d["cfg"] or f not in src:
+                continue
+            v = _bcfg_clean(f, src[f])
+            if v is _BOT_NO_VALUE or v in ("", []):
+                continue
+            d["cfg"][f] = v
+            added.append(f)
+
+    try:
+        _bcfg_update(fn)
+    except OSError:
+        return {"ok": False, "code": "save"}
+    return {"ok": True, "added": added}
+
+
+def _bot_op_buy(b):
+    ref = str(b.get("ref") or "")
+    game = str(b.get("game") or "").lower()
+    if not re.fullmatch(r"[A-Za-z0-9_-]{8,64}", ref):
+        return {"ok": False, "code": "bad_ref"}
+    if game not in BOT_GAMES:
+        return {"ok": False, "code": "bad_game"}
+    try:
+        days, base, paid, tg = int(b.get("days")), int(b.get("base") or 0), int(b.get("paid") or 0), int(b.get("tg"))
+    except (TypeError, ValueError):
+        return {"ok": False, "code": "bad_args"}
+    src = "gift" if b.get("src") == "gift" else "buy"
+    if days not in KEY_DAYS or tg <= 0 or paid < 0 or base < 0 or paid > 10**9:
+        return {"ok": False, "code": "bad_args"}
+    bd = _bcfg_load()
+    now = int(time.time())
+    with _kv_lock:
+        d = _kv_load()
+        for k, r in d["keys"].items():                       # ĐÃ cấp cho ref này rồi -> trả đúng key đó (idempotent)
+            if r.get("bref") == ref:
+                if _key_game(r) != game or int(r.get("days") or 0) != days:
+                    return {"ok": False, "code": "ref_conflict"}
+                return _bot_buy_resp(r, k, game, bd, True)
+        gv = next(g for g in _bot_games_view(bd) if g["code"] == game)
+        if not gv["sell"] or gv["off_tables"]:
+            return {"ok": False, "code": "game_off"}
+        price = _bot_price(bd["games"], game, days)
+        if price <= 0:
+            return {"ok": False, "code": "no_package"}
+        if src == "buy" and (base != price or paid > price):
+            return {"ok": False, "code": "price_changed", "price": price}
+        if src == "gift":
+            paid = 0
+        if len(d["keys"]) >= KEY_MAX_TOTAL:                  # đầy -> tự dọn key đã hết hạn
+            for k in [k for k, r in d["keys"].items() if _is_expired(r, now)]:
+                del d["keys"][k]
+        if len(d["keys"]) >= KEY_MAX_TOTAL:
+            return {"ok": False, "code": "full"}
+        mdev = (bd.get("cfg") or {}).get("bot_max_dev")
+        k = _new_key(KEY_PREFIX[game], d["keys"])
+        rec = {"type": "user", "by": "bot", "by_name": "Telegram Bot", "created": now,
+               "exp": (0 if KEY_START_ON_ACTIVATE else now + days * 86400), "days": days, "note": f"tg:{tg}", "owner": None,
+               "max_dev": mdev if mdev in KEY_DEV_OPTIONS else KEY_DEV_DEFAULT, "devs": {}, "game": game,
+               "bref": ref, "btg": tg, "bp": paid, "bsrc": src}
+        if KEY_START_ON_ACTIVATE:
+            rec["act"] = 0
+        d["keys"][k] = rec
+        _bot_ledger_add(d, now, game, paid, src, ref, tg, days, k)
+        try:
+            _kv_save(d)
+        except OSError:
+            return {"ok": False, "code": "save"}
+        return _bot_buy_resp(rec, k, game, bd, False)
+
+
+def _bc_new(text, by, src, st="queued", sent=0, failed=0):
+    it = {"id": secrets.token_hex(6), "text": text, "by": str(by or "")[:40], "src": src, "at": int(time.time()), "st": st, "sent": int(sent), "failed": int(failed)}
+
+    def fn(d):
+        d["bc"].insert(0, it)
+        del d["bc"][BOT_BC_KEEP:]
+
+    _bcfg_update(fn)
+    return it
+
+
+def _bc_clean(t):
+    t = _nt_clean_text(t)
+    return t if 1 <= len(t) <= BOT_BC_MAX_TEXT else ""
+
+
+def _bot_op_bc_claim(b):
+    bid = str(b.get("id") or "")
+    res = {"ok": False, "code": "not_queued"}
+
+    def fn(d):
+        for x in d["bc"]:
+            if x.get("id") == bid and x.get("st") == "queued":
+                x["st"], x["claimed"] = "sending", int(time.time())
+                res.update(ok=True, text=x["text"])
+                res.pop("code", None)
+
+    try:
+        _bcfg_update(fn)
+    except OSError:
+        return {"ok": False, "code": "save"}
+    return res
+
+
+def _bot_op_bc_done(b):
+    bid = str(b.get("id") or "")
+    try:
+        sent, failed = max(0, int(b.get("sent") or 0)), max(0, int(b.get("failed") or 0))
+    except (TypeError, ValueError):
+        return {"ok": False, "code": "bad_args"}
+
+    def fn(d):
+        for x in d["bc"]:
+            if x.get("id") == bid and x.get("st") in ("sending", "queued"):
+                x["st"], x["sent"], x["failed"], x["done"] = "done", sent, failed, int(time.time())
+
+    try:
+        _bcfg_update(fn)
+    except OSError:
+        return {"ok": False, "code": "save"}
+    return {"ok": True}
+
+
+def _bot_op_bc_log(b):
+    """Admin gửi broadcast NGAY TRONG bot -> ghi lịch sử để panel xem."""
+    text = _bc_clean(b.get("text"))
+    if not text:
+        return {"ok": False, "code": "bad_args"}
+    try:
+        sent, failed = max(0, int(b.get("sent") or 0)), max(0, int(b.get("failed") or 0))
+    except (TypeError, ValueError):
+        return {"ok": False, "code": "bad_args"}
+    try:
+        _bc_new(text, _line_clean(b.get("by"), 40) or "bot", "bot", "done", sent, failed)
+    except OSError:
+        return {"ok": False, "code": "save"}
+    return {"ok": True}
+
+
+_BOT_OPS = {"catalog": _bot_op_catalog, "seed": _bot_op_seed, "buy": _bot_op_buy,
+            "bc_claim": _bot_op_bc_claim, "bc_done": _bot_op_bc_done, "bc_log": _bot_op_bc_log}
+
+
+@app.route("/__bot/<op>", methods=["GET", "POST"])
+def bot_dispatch(op):
+    _bot_auth(op)                                         # xác thực TRƯỚC khi xét op có tồn tại hay không -> không lộ gì
+    fn = _BOT_OPS.get(op)
+    if fn is None:
+        abort(404)
+    if not _rate_ok("bot:all", 1200):
+        return _bot_json({"ok": False, "code": "rate"}, 429)
+    b = request.get_json(silent=True) if request.method == "POST" else {}
+    if not isinstance(b, dict):
+        b = {}
+    try:
+        return _bot_json(fn(b))
+    except HTTPException_:
+        raise
+    except Exception as e:  # noqa: BLE001
+        _err500(e, "bot:" + op)
+        return _bot_json({"ok": False, "code": "server"}, 500)
+
+
+# ─ PANEL: cấu hình bot (quyền botcfg) ─
+def _bot_seen_view():
+    t = _bot_seen["t"]
+    return {"t": t or None, "ip": _bot_seen["ip"] if t else ""}
+
+
+def _bot_admin_view(s):
+    bd = _bcfg_load()
+    cg, cfg = bd.get("games") or {}, bd.get("cfg") or {}
+    games = []
+    for gv in _bot_games_view(bd):
+        g = gv["code"]
+        gc = cg.get(g) or {}
+        games.append({"code": g, "label": KEY_GAME_LABEL[g], "name": gc.get("name") or "", "sell": gv["sell"], "url": gc.get("url") or "",
+                      "prices": {str(dd): _bot_price(cg, g, dd) for dd in KEY_DAYS}, "tables": [OFFSRV_LABEL[t] for t in _bot_game_tables(g)],
+                      "off_tables": gv["off_tables"], "online": gv["online"]})
+    main = s["r"] == "main"
+    fields = {}
+    for f, (kind, only_main) in BOT_CFG_SPEC.items():
+        if only_main and not main and f != "admin_ids":
+            fields[f] = {"v": None, "lock": True}             # admin phụ KHÔNG thấy thông tin ngân hàng / cờ QR
+        else:
+            fields[f] = {"v": cfg.get(f, [] if kind == "ids" else ("" if kind != "bool" else None)), "lock": only_main and not main}
+    return {"ok": True, "bot_api": BOT_ENABLED, "ip_limit": bool(BOT_IPS), "seen": _bot_seen_view(), "days": list(KEY_DAYS), "games": games, "cfg": fields,
+            "default_prices": {str(k): v for k, v in sorted(KEY_PRICE.items())}, "dev_options": list(KEY_DEV_OPTIONS)}
+
+
+@app.route("/api/admin/bot")
+def api_admin_bot():
+    s, err = _need_perm("botcfg")
+    if err:
+        return err
+    return _json(_bot_admin_view(s))
+
+
+@app.route("/api/admin/bot/game", methods=["POST"])
+def api_admin_bot_game():
+    """Sửa 1 game: {"game": "sun", "sell": true|false, "name": "...", "url": "https://...", "prices": {"1": 10000, "3": 25000, ...}} (giá 0 = không bán gói đó)."""
+    s, err = _need_perm("botcfg")
+    if err:
+        return err
+    b = request.get_json(silent=True) or {}
+    g = str(b.get("game") or "").lower()
+    if g not in BOT_GAMES:
+        return _json({"ok": False, "loi": "game khong hop le"}, 400)
+    upd = {}
+    if "sell" in b:
+        if not isinstance(b["sell"], bool):
+            return _json({"ok": False, "loi": "sell phai la true/false"}, 400)
+        upd["sell"] = b["sell"]
+    if "name" in b:
+        nm = _line_clean(b.get("name"), 30)
+        upd["name"] = nm
+    if "url" in b:
+        u = _clean_url(b.get("url"))
+        if u is None:
+            return _json({"ok": False, "loi": "link game phai la http(s)://... (toi da 300 ky tu, khong khoang trang)"}, 400)
+        upd["url"] = u
+    if "prices" in b:
+        pr = b.get("prices")
+        if not isinstance(pr, dict):
+            return _json({"ok": False, "loi": "prices phai la object {ngay: gia}"}, 400)
+        clean = {}
+        for k, v in pr.items():
+            try:
+                dd = int(k)
+                if isinstance(v, bool) or v is None or str(v).strip() == "":
+                    raise ValueError
+                p = int(str(v).strip())
+            except (TypeError, ValueError):
+                return _json({"ok": False, "loi": "gia khong hop le"}, 400)
+            if dd not in KEY_DAYS or not 0 <= p <= 100_000_000:
+                return _json({"ok": False, "loi": f"gia goi {k} ngay phai tu 0 toi 100.000.000"}, 400)
+            clean[str(dd)] = p
+        upd["prices"] = clean
+
+    def fn(d):
+        gc = d["games"].setdefault(g, {})
+        for k, v in upd.items():
+            if k == "prices":
+                gc.setdefault("prices", {}).update(v)
+            elif k == "name" and v == "":
+                gc.pop("name", None)
+            elif k == "url" and v == "":
+                gc.pop("url", None)
+            else:
+                gc[k] = v
+
+    try:
+        _bcfg_update(fn)
+    except OSError as e:
+        return _json({"ok": False, "loi": f"khong ghi duoc file cau hinh bot: {e}"}, 500)
+    _audit("bot_game_set", by=s["n"], game=g, f=sorted(upd))
+    return _json(_bot_admin_view(s))
+
+
+@app.route("/api/admin/bot/cfg", methods=["POST"])
+def api_admin_bot_cfg():
+    """Sửa cấu hình bot: {"cfg": {"cskh_username": "...", ...}}. Trường nhạy cảm (admin_ids · ngân hàng · QR) CHỈ admin chính. Giá trị rỗng = xoá (bot dùng config.env)."""
+    s, err = _need_perm("botcfg")
+    if err:
+        return err
+    b = request.get_json(silent=True) or {}
+    cf = b.get("cfg")
+    if not isinstance(cf, dict) or not cf:
+        return _json({"ok": False, "loi": "thieu cfg"}, 400)
+    upd = {}
+    for f, v in cf.items():
+        if f not in BOT_CFG_SPEC:
+            return _json({"ok": False, "loi": f"truong khong hop le: {str(f)[:30]}"}, 400)
+        if BOT_CFG_SPEC[f][1] and s["r"] != "main":
+            _audit("perm_denied", role=s["r"], perm="botcfg_sensitive", f=f)
+            return _json({"ok": False, "loi": "truong nay chi admin chinh sua duoc"}, 403)
+        c = _bcfg_clean(f, v)
+        if c is _BOT_NO_VALUE:
+            return _json({"ok": False, "loi": f"gia tri khong hop le: {f}"}, 400)
+        upd[f] = c
+    cur = _bcfg_load()["cfg"]
+    mn = upd.get("min_deposit", cur.get("min_deposit"))
+    mx = upd.get("max_deposit", cur.get("max_deposit"))
+    if isinstance(mn, int) and isinstance(mx, int) and mn > mx:
+        return _json({"ok": False, "loi": "nap toi thieu phai <= nap toi da"}, 400)
+    if "admin_ids" in upd:
+        with _kv_lock:
+            dk = _kv_load()
+        if any(_tg_taken_sub(dk, t) for t in upd["admin_ids"]):
+            return _json({"ok": False, "loi": "Chat ID admin chinh trung voi 1 admin phu"}, 400)
+
+    def fn(d):
+        for f, v in upd.items():
+            if v in ("", []) and BOT_CFG_SPEC[f][0] != "bool":
+                d["cfg"].pop(f, None)
+            else:
+                d["cfg"][f] = v
+
+    try:
+        _bcfg_update(fn)
+    except OSError as e:
+        return _json({"ok": False, "loi": f"khong ghi duoc file cau hinh bot: {e}"}, 500)
+    _audit("bot_cfg_set", by=s["n"], f=sorted(upd))
+    return _json(_bot_admin_view(s))
+
+
+def _tg_taken_sub(d, tg):
+    return any(r.get("type") == "sub" and r.get("tg") == tg for r in d["keys"].values())
+
+
+# ─ PANEL: broadcast tới toàn bot (quyền broadcast) — bot nhận việc ở lần đồng bộ kế tiếp rồi gửi ─
+def _bc_view():
+    bd = _bcfg_load()
+    now = int(time.time())
+    items = []
+    for x in bd.get("bc", []):
+        st = x.get("st")
+        if st == "sending" and now - int(x.get("claimed") or 0) > BOT_BC_STALE:
+            st = "stale"
+        items.append({"id": x.get("id"), "text": x.get("text", ""), "by": x.get("by", ""), "src": x.get("src", ""), "at": x.get("at"),
+                      "st": st, "sent": x.get("sent", 0), "failed": x.get("failed", 0)})
+    return {"ok": True, "items": items, "max": BOT_BC_MAX_TEXT, "bot_api": BOT_ENABLED, "seen": _bot_seen_view()}
+
+
+@app.route("/api/admin/broadcast")
+def api_admin_broadcast():
+    s, err = _need_perm("broadcast")
+    if err:
+        return err
+    return _json(_bc_view())
+
+
+@app.route("/api/admin/broadcast/send", methods=["POST"])
+def api_admin_broadcast_send():
+    s, err = _need_perm("broadcast")
+    if err:
+        return err
+    if not BOT_ENABLED:
+        return _json({"ok": False, "loi": "chua bat bot API (SUNVIW_BOT_SECRET)"}, 400)
+    if not _rate_ok(f"bcsend:{s['n']}", 3):
+        return _too_many("gui thong bao qua nhanh, doi it giay", 20)
+    text = _bc_clean((request.get_json(silent=True) or {}).get("text"))
+    if not text:
+        return _json({"ok": False, "loi": f"noi dung 1-{BOT_BC_MAX_TEXT} ky tu"}, 400)
+    if sum(1 for x in _bcfg_load().get("bc", []) if x.get("st") in ("queued", "sending")) >= 5:
+        return _json({"ok": False, "loi": "dang co qua nhieu thong bao cho gui, doi bot gui xong"}, 429)
+    try:
+        it = _bc_new(text, s["n"], "panel")
+    except OSError as e:
+        return _json({"ok": False, "loi": f"khong ghi duoc: {e}"}, 500)
+    _audit("broadcast_queue", by=s["n"], n=len(text))
+    return _json(dict(_bc_view(), queued=it["id"]))
+
+
+@app.route("/api/admin/broadcast/cancel", methods=["POST"])
+def api_admin_broadcast_cancel():
+    s, err = _need_perm("broadcast")
+    if err:
+        return err
+    bid = str((request.get_json(silent=True) or {}).get("id") or "")
+    hit = []
+
+    def fn(d):
+        for x in d["bc"]:
+            if x.get("id") == bid and x.get("st") == "queued":
+                x["st"] = "cancel"
+                hit.append(1)
+
+    try:
+        _bcfg_update(fn)
+    except OSError as e:
+        return _json({"ok": False, "loi": f"khong ghi duoc: {e}"}, 500)
+    if not hit:
+        return _json({"ok": False, "loi": "chi huy duoc thong bao dang cho gui"}, 404)
+    _audit("broadcast_cancel", by=s["n"])
+    return _json(_bc_view())
+
+
+@app.route("/api/admin/keys/perms", methods=["POST"])
+def api_admin_keys_perms():
+    """CHỈ ADMIN CHÍNH: đặt quyền + Chat ID Telegram cho 1 key admin phụ: {"key": "...", "perms": ["deposit", ...], "tg": 123456789 | null}."""
+    s, err = _need_admin()
+    if err:
+        return err
+    if s["r"] != "main":
+        _audit("perm_denied", role=s["r"], perm="grant")
+        return _json({"ok": False, "loi": "chi admin chinh moi phan quyen duoc"}, 403)
+    b = request.get_json(silent=True) or {}
+    k = _norm_key(b.get("key"))
+    perms = b.get("perms")
+    if not isinstance(perms, list) or any(not isinstance(x, str) or x not in PERM_IDS for x in perms):
+        return _json({"ok": False, "loi": "danh sach quyen khong hop le"}, 400)
+    with _kv_lock:
+        d = _kv_load()
+        rec = d["keys"].get(k)
+        if not rec or rec.get("type") != "sub":
+            return _json({"ok": False, "loi": "khong thay key admin phu"}, 404)
+        rec["perms"] = [x for x in PERM_IDS if x in perms]
+        if "tg" in b:
+            if b["tg"] in (None, "", 0):
+                rec.pop("tg", None)
+            else:
+                tg = _clean_tg(b["tg"])
+                if tg is None:
+                    return _json({"ok": False, "loi": "Chat ID khong hop le (5-15 chu so)"}, 400)
+                if _tg_taken(d, tg, k):
+                    return _json({"ok": False, "loi": "Chat ID nay da gan voi admin phu khac / trung admin chinh"}, 400)
+                rec["tg"] = tg
+        try:
+            _kv_save(d)
+        except OSError as e:
+            return _json({"ok": False, "loi": f"khong ghi duoc file key: {e}"}, 500)
+        out = {"perms": _sub_perms(rec), "tg": rec.get("tg")}
+    _audit("perm_set", by=s["n"], target=k[:8], perms=out["perms"])
+    return _json(dict(out, ok=True))
+
+
+# ─ DUYỆT THIẾT BỊ VÀO PANEL /api/html — quyền devices (xem khối "DUYỆT THIẾT BỊ VÀO PANEL" ở trên) ─
 def _need_main():
     s, err = _need_admin()
     if err:
@@ -6750,7 +7584,7 @@ def _need_main():
 @app.route("/api/admin/panel")
 def api_admin_panel():
     """Danh sách thiết bị đã xin vào panel: chờ duyệt (lên đầu) · đã duyệt · từ chối."""
-    s, err = _need_main()
+    s, err = _need_perm("devices")
     if err:
         return err
     with _pv_lock:
@@ -6766,7 +7600,7 @@ def api_admin_panel():
 
 def _panel_admin_act(act):
     """approve / deny / remove cho 1 thiết bị {"hwid": "..."} hoặc nhiều {"hwids": [...]}. remove = xóa khỏi danh sách (đang được duyệt thì mất quyền ngay, phải xin lại)."""
-    s, err = _need_main()
+    s, err = _need_perm("devices")
     if err:
         return err
     b = request.get_json(silent=True) or {}
@@ -6935,9 +7769,11 @@ const I={home:ic('<path d="M3 11 12 3l9 8M5 10v10h14V10"/>'),key:ic('<circle cx=
  cp:ic('<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>'),del:ic('<path d="M4 7h16M10 11v6m4-6v6M6 7l1 13h10l1-13M9 7V4h6v3"/>'),rf:ic('<path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/>'),out:ic('<path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M16 8l4 4-4 4M20 12H9"/>'),mo:ic('<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>'),th:ic('<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/>'),clk:ic('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>')};
 I.bell=ic('<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>');
 I.pwr=ic('<path d="M12 3v9"/><path d="M6.4 6.4a8 8 0 1 0 11.2 0"/>');
+I.bot=ic('<rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 8V4M9 14h.01M15 14h.01"/>');
+I.mega=ic('<path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1zM15 9a4 4 0 0 1 0 6"/>');
 let S=null;try{S=JSON.parse(sessionStorage.getItem('as')||'null')}catch(e){}
-let V='ov',KEYS=[],DAYS=[1,3,7,30,60,90],DEVO=[1,2,3,5,10,20,50],GAMES=[{id:'sun'},{id:'hit'},{id:'lc79'},{id:'betvip'},{id:'max789'},{id:'autolc'}],NEW=[],FL=new Set(),SEL=new Set(),F={t:'all',s:'new',q:''},CF={type:'user',game:'sun',days:30,dev:1,n:1,ba:0,bu:'hour'},PV=[],PF='pending',OS=null,RV=null,AC=null,ACF='all',busy=false,need=false,lastT=0,NT=null,ND={all:false,games:[],text:'',x:50,y:20,size:28,dur:300,cn:5,cu:'m',pos:false,bad:false};
-const isM=()=>S&&S.role==='main',sleep=ms=>new Promise(r=>setTimeout(r,ms));
+let V='ov',KEYS=[],DAYS=[1,3,7,30,60,90],DEVO=[1,2,3,5,10,20,50],GAMES=[{id:'sun'},{id:'hit'},{id:'lc79'},{id:'betvip'},{id:'max789'},{id:'autolc'}],NEW=[],FL=new Set(),SEL=new Set(),F={t:'all',s:'new',q:''},CF={type:'user',game:'sun',days:30,dev:1,n:1,ba:0,bu:'hour'},PV=[],PF='pending',OS=null,RV=null,AC=null,ACF='all',busy=false,need=false,needTg=false,lastT=0,BT=null,BC=null,PC=[],NT=null,ND={all:false,games:[],text:'',x:50,y:20,size:28,dur:300,cn:5,cu:'m',pos:false,bad:false};
+const isM=()=>S&&S.role==='main',can=p=>!!S&&(S.role==='main'||(S.perms||[]).includes(p)),sleep=ms=>new Promise(r=>setTimeout(r,ms));
 function toast(m,bad){const e=document.createElement('div');if(bad)e.className='e';e.textContent=m;$('#ts').appendChild(e);setTimeout(()=>e.remove(),2600)}
 function ask(msg,ok){return new Promise(r=>{const d=$('#dg');d.innerHTML=`<div class="di"><p style="margin:0">${esc(msg)}</p><div class="da"><button class="gh" data-x="no">Hủy</button><button class="pr" data-x="ok">${esc(ok||'Xác nhận')}</button></div></div>`;d.onclose=null;d.dataset.ask=1;d.dataset.k='';d._r=r;d.showModal()})}
 $('#dg').addEventListener('click',e=>{const d=$('#dg'),x=e.target.dataset&&e.target.dataset.x;if(d.dataset.ask&&x){d.dataset.ask='';d.close();d._r(x==='ok')}else if(e.target===d){const w=d.dataset.ask;d.close();if(w){d.dataset.ask='';d._r(false)}}});
@@ -6953,20 +7789,20 @@ async function api(p,body){
   return j}
 /* ── đăng nhập ── */
 function res(c,t,d){$('#res').innerHTML=t?`<div class="rs ${c}"><b>${esc(t)}</b>${d?`<div class="mu s">${esc(d)}</div>`:''}</div>`:''}
-function login0(msg){need=false;$('#app').innerHTML=`<div class="lo"><div class="lg" style="padding:0"><i>${I.key}</i>SUNVIW Console</div><h1>Đăng nhập quản trị</h1><div class="mu">Một ô duy nhất — hệ thống tự nhận admin chính, admin phụ hay key không hợp lệ.</div>
+function login0(msg){need=false;needTg=false;$('#app').innerHTML=`<div class="lo"><div class="lg" style="padding:0"><i>${I.key}</i>SUNVIW Console</div><h1>Đăng nhập quản trị</h1><div class="mu">Một ô duy nhất — hệ thống tự nhận admin chính, admin phụ hay key không hợp lệ.</div>
 <input class="in" id="k" type="password" autocomplete="off" spellcheck="false" placeholder="Dán key hoặc mật khẩu admin" autofocus>
-<input class="in" id="un" maxlength="20" placeholder="Username cho key admin phụ mới (vd: Dark)" hidden><button class="pr" id="go">Vào console</button><div id="res"></div></div>`;if(msg)res('warn',msg)}
+<input class="in" id="un" maxlength="20" placeholder="Username cho key admin phụ mới (vd: Dark)" hidden><input class="in" id="tg" inputmode="numeric" maxlength="15" placeholder="Chat ID Telegram của bạn (gõ /id trong bot để lấy)" hidden><button class="pr" id="go">Vào console</button><div id="res"></div></div>`;if(msg)res('warn',msg)}
 async function login(){
   if(busy)return;const k=$('#k').value.trim();if(!k)return res('bad','Chưa nhập key','Dán key vào ô rồi bấm Vào.');
-  busy=true;const b=$('#go');b.disabled=true;const body={key:k};if(need)body.username=$('#un').value.trim();
+  busy=true;const b=$('#go');b.disabled=true;const body={key:k};if(need)body.username=$('#un').value.trim();if(needTg)body.tg=$('#tg').value.trim();
   const j=await api('/api/admin/login',body);busy=false;b.disabled=false;
-  if(j.ok){res('good',j.role==='main'?'Admin chính':'Admin phụ · '+j.name,j.role==='sub'?'Thiết bị gắn key: '+j.dev+'/'+j.max_dev:'');await sleep(400);S={token:j.token,sk:j.sk,role:j.role,name:j.name};sessionStorage.setItem('as',JSON.stringify(S));return boot()}
-  if(j.need_username){need=true;$('#un').hidden=false;$('#un').focus();return res('warn','Key admin phụ mới',j.loi)}
+  if(j.ok){res('good',j.role==='main'?'Admin chính':'Admin phụ · '+j.name,j.role==='sub'?'Thiết bị gắn key: '+j.dev+'/'+j.max_dev:'');await sleep(400);S={token:j.token,sk:j.sk,role:j.role,name:j.name,perms:j.perms||[]};sessionStorage.setItem('as',JSON.stringify(S));return boot()}
+  if(j.need_username||j.need_tg){need=!!j.need_username;needTg=!!j.need_tg;$('#un').hidden=!need;$('#tg').hidden=!needTg;(need?$('#un'):$('#tg')).focus();return res('warn',need?'Key admin phụ mới':'Cần Chat ID Telegram',j.loi)}
   if(j.dev_locked)return res('bad','Key đã đủ số thiết bị',j.loi);
   res(j.kind==='user'?'warn':'bad',{user:'Đây là key người dùng',none:'Không tìm thấy key',locked:'Tạm khóa do nhập sai nhiều lần'}[j.kind]||'Không vào được',j.loi||'')}
 /* ── dữ liệu ── */
-async function boot(){shell();await loadKeys();if(isM()){loadPv();loadOs();loadRv();loadAc();loadNt()}}
-async function loadKeys(){const j=await api('/api/admin/keys');if(!S)return;if(j.ok){KEYS=j.keys;lastT=now();DAYS=j.ngay||DAYS;DEVO=j.so_tb||DEVO;GAMES=j.games||GAMES;const h=new Set(KEYS.map(r=>r.key));SEL=new Set([...SEL].filter(k=>h.has(k)))}paint()}
+async function boot(){shell();await loadKeys();if(can('devices'))loadPv();if(can('offserver'))loadOs();if(can('revenue'))loadRv();if(can('autocuoc'))loadAc();if(can('notice'))loadNt();if(can('botcfg'))loadBt();if(can('broadcast'))loadBc()}
+async function loadKeys(){const j=await api('/api/admin/keys');if(!S)return;if(j.ok){if(j.my_perms&&JSON.stringify(j.my_perms)!==JSON.stringify(S.perms||[])){S.perms=j.my_perms;try{sessionStorage.setItem('as',JSON.stringify(S))}catch(e){}shell()}PC=j.perm_catalog||PC;KEYS=j.keys;lastT=now();DAYS=j.ngay||DAYS;DEVO=j.so_tb||DEVO;GAMES=j.games||GAMES;const h=new Set(KEYS.map(r=>r.key));SEL=new Set([...SEL].filter(k=>h.has(k)))}paint()}
 async function loadPv(){const j=await api('/api/admin/panel');if(S&&j.ok){PV=j.devices;paint()}}
 async function loadOs(){const j=await api('/api/admin/offserver');if(S&&j.ok){OS=j;paint()}}
 async function loadRv(){const j=await api('/api/admin/revenue');if(S&&j.ok){RV=j;RV._t=now();paint()}}
@@ -6994,19 +7830,19 @@ function renderKeys(){const a=vis(),n=SEL.size,m=isM(),c=(f,t)=>`<button data-f=
 function openKey(k){const r=KEYS.find(x=>x.key===k);if(!r)return;const d=$('#dg'),[s,l]=stt(r);d.dataset.ask='';d.dataset.k=k;
  d.innerHTML=`<div class="di"><div class="hd"><h3 class="mono" style="word-break:break-all">${esc(r.key)}</h3><button class="ib" data-x="c">✕</button></div><div class="kc">${gb(r)}<span class="bd ${s}">${l}</span><span class="bd">${r.so_dev}/${r.max_dev} máy</span></div>
  <p class="s" style="margin:10px 0 0">${r.kich_hoat===false?'Chưa kích hoạt — hạn '+(DL[r.ngay]||r.ngay+' ngày')+' tính từ lần dùng đầu.':'<b>'+esc(left(lf(r)))+'</b> · hết hạn '+esc(fmt(r.het_han))}${r.cong_gio?`<br><span class="okc">Đã cộng tổng ${+(r.cong_gio/3600).toFixed(1)} giờ.</span>`:''}</p>
- <p class="s mu" style="margin:4px 0 0">${isM()&&r.nguoi_tao?'Tạo bởi '+esc(r.nguoi_tao)+' · ':''}tạo ${esc(fmt(r.tao_luc))}${r.dung_boi?' · dùng bởi '+esc(r.dung_boi):''}${r.ghi_chu?' · “'+esc(r.ghi_chu)+'”':''}</p>
+ <p class="s mu" style="margin:4px 0 0">${isM()&&r.nguoi_tao?'Tạo bởi '+esc(r.nguoi_tao)+' · ':''}tạo ${esc(fmt(r.tao_luc))}${r.dung_boi?' · dùng bởi '+esc(r.dung_boi)+(r.tg?' · Chat ID '+esc(r.tg):''):''}${r.ghi_chu?' · “'+esc(r.ghi_chu)+'”':''}</p>
  <h4>Cộng thời gian</h4><div class="pl">${[[1,'hour','giờ'],[6,'hour','giờ'],[1,'day','ngày'],[1,'week','tuần'],[1,'month','tháng']].map(q=>`<button data-a="add" data-k="${esc(r.key)}" data-h="${q[0]}" data-u="${q[1]}">+${q[0]} ${q[2]}</button>`).join('')}<button class="pr" data-a="addc" data-k="${esc(r.key)}">Tùy chọn…</button></div>
  <h4>Thiết bị đã gắn (${r.so_dev}/${r.max_dev})</h4>${(r.thiet_bi||[]).map(t=>`<div class="dr"><span class="mono s" title="${esc(t.hw)}">${esc(shw(t.hw))}</span><span class="mu s">IP ${esc(t.ip||'?')} · dùng ${esc(ago(t.gan_nhat))}</span><button class="gh dg" data-a="rd" data-k="${esc(r.key)}" data-w="${esc(t.hw)}">Gỡ</button></div>`).join('')||'<div class="s mu">Chưa có thiết bị.</div>'}
- <div class="da" style="justify-content:flex-start;flex-wrap:wrap"><button class="gh" data-a="cp" data-v="${esc(r.key)}">${I.cp} Sao chép</button>${r.so_dev?`<button class="gh" data-a="rs" data-k="${esc(r.key)}">Reset thiết bị</button>`:''}<button class="gh dg" data-a="del" data-k="${esc(r.key)}">${I.del} Xóa key</button></div></div>`;
+ ${isM()&&r.loai==='sub'?pmBox(r):''}<div class="da" style="justify-content:flex-start;flex-wrap:wrap"><button class="gh" data-a="cp" data-v="${esc(r.key)}">${I.cp} Sao chép</button>${r.so_dev?`<button class="gh" data-a="rs" data-k="${esc(r.key)}">Reset thiết bị</button>`:''}<button class="gh dg" data-a="del" data-k="${esc(r.key)}">${I.del} Xóa key</button></div></div>`;
  if(!d.open)d.showModal()}
 /* ── view ── */
 function vOv(){const live=KEYS.filter(r=>stt(r)[0]!=='ex').length,soon=KEYS.filter(r=>stt(r)[0]==='soon').sort((a,b)=>lf(a)-lf(b)),pend=PV.filter(x=>x.trang_thai==='pending').length,dv=KEYS.reduce((n,r)=>n+r.so_dev,0);
  const by=g=>KEYS.filter(r=>r.loai==='user'&&r.game===g).length;
- return `<div class="gd"><div class="st"><b>${live}</b><span>Key còn hạn / ${KEYS.length}</span></div><div class="st"><b class="${soon.length?'noc':''}">${soon.length}</b><span>Sắp hết hạn (&lt;3 giờ)</span></div><div class="st"><b>${dv}</b><span>Thiết bị đang gắn</span></div>${isM()?`<div class="st"><b class="${pend?'noc':''}">${pend}</b><span>Thiết bị chờ duyệt</span></div>`:''}</div>
+ return `<div class="gd"><div class="st"><b>${live}</b><span>Key còn hạn / ${KEYS.length}</span></div><div class="st"><b class="${soon.length?'noc':''}">${soon.length}</b><span>Sắp hết hạn (&lt;3 giờ)</span></div><div class="st"><b>${dv}</b><span>Thiết bị đang gắn</span></div>${can('devices')?`<div class="st"><b class="${pend?'noc':''}">${pend}</b><span>Thiết bị chờ duyệt</span></div>`:''}</div>
  <div class="cd"><div class="hd"><h2>Cần gia hạn ngay</h2>${soon.length?`<button class="pr sm" data-a="allsoon">${I.clk} +1 giờ cho cả ${soon.length} key</button>`:''}</div>${soon.length?soon.slice(0,8).map(row).join(''):'<div class="em">Không có key nào sắp hết hạn.</div>'}</div>
- ${isM()&&OS&&OS.any?`<div class="cd" style="border-color:var(--no)"><div class="hd"><h2><span class="osd off"></span> Đang OFF SERVER: ${OS.tables.filter(r=>r.off).map(r=>esc(r.ten)).join(' · ')}</h2><button class="gh" data-a="osgo">Quản lý</button></div><div class="s mu">Tool ngoài dùng các bàn này đang không lấy được dự đoán.</div></div>`:''}
+ ${can('offserver')&&OS&&OS.any?`<div class="cd" style="border-color:var(--no)"><div class="hd"><h2><span class="osd off"></span> Đang OFF SERVER: ${OS.tables.filter(r=>r.off).map(r=>esc(r.ten)).join(' · ')}</h2><button class="gh" data-a="osgo">Quản lý</button></div><div class="s mu">Tool ngoài dùng các bàn này đang không lấy được dự đoán.</div></div>`:''}
  <div class="cd"><h2>Key theo game</h2><div class="pl">${GAMES.map(g=>`<span class="bd g g-${esc(g.id)}" style="height:30px;padding:0 12px;font-size:13px">${esc(GL[g.id]||g.id)} · ${by(g.id)}</span>`).join('')}</div></div>
- ${isM()&&RV?`<div class="cd"><h2>Doanh thu</h2><div class="gd" style="margin:0">${[['ngay','Hôm nay'],['tuan','Tuần này'],['thang','30 ngày']].map(([k,t])=>`<div class="st"><b style="font-size:21px">${vnd(RV.doanh_thu[k].tong)}</b><span>${t} · ${RV.doanh_thu[k].so_key} key</span></div>`).join('')}</div></div>`:''}`}
+ ${can('revenue')&&RV?`<div class="cd"><h2>Doanh thu bot Tele</h2><div class="gd" style="margin:0">${[['ngay','Hôm nay'],['tuan','Tuần này'],['thang','30 ngày']].map(([k,t])=>`<div class="st"><b style="font-size:21px">${vnd(RV.doanh_thu[k].tong)}</b><span>${t} · ${RV.doanh_thu[k].so_key} key</span></div>`).join('')}</div></div>`:''}`}
 function vMk(){const m=isM(),pb=(id,arr,cur,lab)=>`<div class="pl" id="${id}">${arr.map(v=>`<button data-c="${id}" data-v="${esc(v)}" class="${v==cur?'on':''}">${esc(lab(v))}</button>`).join('')}</div>`;
  return `<div class="cd"><h2>Tạo key mới</h2>${m?`<div class="lb">Loại key</div>${pb('type',['user','sub'],CF.type,v=>v==='user'?'Key người dùng':'Key admin phụ')}`:''}
  ${CF.type==='user'?`<div class="lb">Game <span class="mu s">— mỗi key chỉ dùng cho 1 game</span></div>${pb('game',GAMES.map(g=>g.id),CF.game,v=>GL[v]||v)}`:''}
@@ -7038,7 +7874,7 @@ function openAc(id,keep){const s=((AC&&AC.accounts)||[]).find(x=>x.id===id);if(!
  if(!d.open)d.showModal();if(sc){d.scrollTop=sc[0];const i=d.querySelector('.di');if(i)i.scrollTop=sc[1]}}
 function vRv(){if(!RV)return'<div class="em">Đang tải…</div>';const W=[['ngay','Hôm nay','từ 00:00 hôm nay · qua 00:00 là về 0'],['tuan','Tuần này','từ 00:00 thứ Hai · sang thứ Hai mới là về 0'],['thang','1 tháng','30 ngày gần nhất']];
  return `<div class="gd">${W.map(([k,t,sub])=>`<div class="st"><b style="font-size:23px">${vnd(RV.doanh_thu[k].tong)}</b><span>${t} · ${RV.doanh_thu[k].so_key} key<br>${sub}</span></div>`).join('')}</div>
- <div class="cd"><div class="hd"><h2>Theo game</h2><button class="gh" data-a="rvrf">${I.rf}</button></div>${W.map(([k,t])=>{const o=RV.doanh_thu[k];return `<p style="margin:6px 0"><b>${t}:</b> ${Object.keys(o.game).filter(g=>g!=='all'||o.game[g].so_key).map(g=>`<span class="bd g g-${esc(g)}">${esc(GL[g]||g)}</span> ${vnd(o.game[g].tien)} <span class="mu s">(${o.game[g].so_key} key)</span>`).join(' &nbsp; ')}</p>`}).join('')}<div class="s mu" style="margin-top:8px">Bảng giá: ${Object.entries(RV.bang_gia).map(([d,p])=>(DL[d]||d+' ngày')+' = '+vnd(p)).join(' · ')}. Giờ cộng thêm không tính vào doanh thu.</div></div>`}
+ <div class="cd"><div class="hd"><h2>Theo game</h2><button class="gh" data-a="rvrf">${I.rf}</button></div>${W.map(([k,t])=>{const o=RV.doanh_thu[k];return `<p style="margin:6px 0"><b>${t}:</b> ${Object.keys(o.game).filter(g=>g!=='all'||o.game[g].so_key).map(g=>`<span class="bd g g-${esc(g)}">${esc(GL[g]||g)}</span> ${vnd(o.game[g].tien)} <span class="mu s">(${o.game[g].so_key} key)</span>`).join(' &nbsp; ')}</p>`}).join('')}<div class="s mu" style="margin-top:8px">Chỉ tính key khách <b>mua qua bot Telegram</b> (đúng số tiền khách trả sau ưu đãi). Key tạo ở panel và key tặng (gifcode) không tính vào doanh thu.</div></div>${vSales()}`}
 /* ── thông báo tới tool (CHỈ admin chính; server kiểm lại mọi request) ── */
 const NTP=[[30,'30 giây'],[60,'1 phút'],[300,'5 phút'],[900,'15 phút'],[3600,'1 giờ'],[21600,'6 giờ'],[86400,'1 ngày']],NTUN=[['s','giây',1],['m','phút',60],['h','giờ',3600],['d','ngày',86400]];
 const ntFmt=s=>{s=Math.max(0,Math.round(s));const d=s/86400|0,h=s%86400/3600|0,m=s%3600/60|0,x=s%60,p=[];if(d)p.push(d+' ngày');if(h)p.push(h+' giờ');if(m)p.push(m+' phút');if(x||!p.length)p.push(x+' giây');return p.slice(0,2).join(' ')};
@@ -7139,18 +7975,72 @@ function vOs(){if(!OS)return'<div class="cd"><div class="em">Đang tải…</div
   return `<div class="cd"><div class="hd"><h2>Off server theo từng bàn</h2><button class="gh dg" type="button" data-a="osall" data-v="1">Tắt tất cả</button><button class="gh" type="button" data-a="osall" data-v="0">Bật tất cả</button></div>
   <div class="s mu" style="line-height:1.6">Bàn nào OFF thì <b>chỉ tool dùng bàn đó</b> không lấy được dự đoán (nhận lỗi 503) — các bàn còn lại chạy bình thường. Server vẫn quét dữ liệu &amp; tính dự đoán; panel của thiết bị đã duyệt và admin chính vẫn xem được. Auto cược LC tự ngừng đặt cược mới khi <b>LC · MD5</b> OFF.</div></div>${OS.games.map(osGame).join('')}`}
 async function osSet(body,msg,okMsg){if(!await ask(msg,'Xác nhận'))return;const j=await api('/api/admin/offserver',body);if(j.ok){OS=j;paint();toast(okMsg)}else toast(j.loi||'Lỗi',1)}
-const TABS=[['ov','Tổng quan','home'],['keys','Key','key'],['mk','Tạo key','plus'],['pv','Thiết bị','dev',1],['ac','Auto cược','bet',1],['rv','Doanh thu','rev',1],['nt','Thông báo','bell',1],['os','Off server','pwr',1]];
-function shell(){const m=isM(),tabs=TABS.filter(t=>m||!t[3]);if(!tabs.some(t=>t[0]===V))V='ov';
+const TABS=[['ov','Tổng quan','home'],['keys','Key','key'],['mk','Tạo key','plus'],['pv','Thiết bị','dev','devices'],['ac','Auto cược','bet','autocuoc'],['rv','Doanh thu','rev','revenue'],['nt','Thông báo tool','bell','notice'],['os','Off server','pwr','offserver'],['bt','Bot Tele','bot','botcfg'],['bc','Broadcast','mega','broadcast']];
+function shell(){const m=isM(),tabs=TABS.filter(t=>!t[3]||can(t[3]));if(!tabs.some(t=>t[0]===V))V='ov';
  $('#app').innerHTML=`<div id="sh"><nav><div class="lg"><i>${I.key}</i>SUNVIW</div>${tabs.map(t=>`<button class="n${V===t[0]?' on':''}" data-v="${t[0]}">${I[t[2]]}<span>${t[1]}</span>${t[0]==='pv'?'<span class="bg" id="pvb" hidden></span>':''}</button>`).join('')}<div class="sp"></div><button class="n" data-a="th">${I.th}<span>Giao diện</span></button><button class="n" data-a="out">${I.out}<span>Đăng xuất</span></button></nav>
- <main><div class="tp"><h1 id="ttl"></h1>${m?`<button class="gh" id="osb" type="button" data-a="osgo" aria-label="Off server theo từng bàn"><i class="osd" id="osd"></i><span class="s" id="osl">Server</span></button>`:''}<span class="ch">${m?'Admin chính':esc(S.name)}</span></div><div id="vw"></div></main></div>`}
+ <main><div class="tp"><h1 id="ttl"></h1>${can('offserver')?`<button class="gh" id="osb" type="button" data-a="osgo" aria-label="Off server theo từng bàn"><i class="osd" id="osd"></i><span class="s" id="osl">Server</span></button>`:''}<span class="ch">${m?'Admin chính':'Admin phụ · '+esc(S.name)}</span></div><div id="vw"></div></main></div>`}
 function paint(){if(!$('#vw'))return;const t=TABS.find(x=>x[0]===V);$('#ttl').textContent=t?t[1]:'';
  document.querySelectorAll('nav button.n[data-v]').forEach(b=>b.classList.toggle('on',b.dataset.v===V));
  const pend=PV.filter(x=>x.trang_thai==='pending').length,pb=$('#pvb');if(pb){pb.hidden=!pend;pb.textContent=pend}
  const od=$('#osd');if(od&&OS){od.className='osd'+(OS.off?' off':OS.any?' part':'');$('#osl').textContent=OS.off?'Off: tất cả bàn':OS.any?'Off '+OS.n_off+'/'+OS.tables.length+' bàn':'Server online'}
  const f=document.activeElement,keep=f&&f.id==='fq'?f.selectionStart:-1;
+ if((V==='bt'||V==='bc')&&$('#vw>.keep')&&$('#vw>.keep').dataset.v===V)return;
  if(V==='nt'&&$('#ntf')){ntList();return}
- $('#vw').innerHTML=({ov:vOv,keys:renderKeys,mk:vMk,pv:vPv,ac:vAc,rv:vRv,nt:vNt,os:vOs}[V]||vOv)();FL=new Set();if(V==='nt')ntPrev();
+ $('#vw').innerHTML=({ov:vOv,keys:renderKeys,mk:vMk,pv:vPv,ac:vAc,rv:vRv,nt:vNt,os:vOs,bt:vBt,bc:vBc}[V]||vOv)();FL=new Set();if(V==='nt')ntPrev();
  if(keep>=0){const q=$('#fq');if(q){q.focus();q.setSelectionRange(keep,keep)}}}
+/* ── Bot Telegram: giá / link game / cấu hình (quyền botcfg) · Broadcast (quyền broadcast) · phân quyền admin phụ (chỉ admin chính) ── */
+let BCD='';
+const DLB={1:'1 ngày',3:'3 ngày',7:'1 tuần',30:'1 tháng',60:'2 tháng',90:'3 tháng'};
+async function loadBt(){if(!can('botcfg'))return;const j=await api('/api/admin/bot');if(S&&j.ok){BT=j;btShow()}}
+async function loadBc(){if(!can('broadcast'))return;const j=await api('/api/admin/broadcast');if(S&&j.ok){BC=j;btShow()}}
+function btShow(){if(V==='bt')$('#vw').innerHTML=vBt();else if(V==='bc')$('#vw').innerHTML=vBc()}
+const IW='width:100%;margin-top:3px';
+function btField(f,label,ph){const x=BT.cfg[f];if(!x)return'';const v=x.v==null?'':(Array.isArray(x.v)?x.v.join(', '):x.v);return `<label class="s" style="display:block"><span class="mu">${label}${x.lock?' 🔒 chỉ admin chính':''}</span><input class="in" style="${IW}" data-bf="${f}" value="${esc(v)}" placeholder="${esc(ph||'')}"${x.lock?' disabled':''}></label>`}
+function btBool(f,label){const x=BT.cfg[f];if(!x)return'';return `<label class="s" style="display:flex;gap:8px;align-items:center"><input type="checkbox" data-bf="${f}"${x.v?' checked':''}${x.lock?' disabled':''}> ${label}${x.lock?' 🔒':''}</label>`}
+function btGame(g){const o=g.online,why=o?'Đang bán':!g.sell?'Đã tắt bán':g.off_tables.length?'OFF: '+g.off_tables.join(', '):'Chưa có gói nào';
+ return `<div class="cd" data-g="${esc(g.code)}"><div class="hd"><h2><span class="bd g g-${esc(g.code)}" style="height:28px;padding:0 12px;font-size:14px">${esc(g.label)}</span></h2><span class="bd ${o?'ok':'ex'}">${esc(why)}</span></div>
+ <div class="s mu" style="margin-bottom:8px">Trạng thái do các bàn quyết định: ${g.tables.map(esc).join(' · ')}. Chỉ cần <b>1 bàn OFF</b> là game tự biến mất khỏi mục Mua Key của bot, bật lại là hiện lại.</div>
+ <label class="s" style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><input type="checkbox" data-bg="sell"${g.sell?' checked':''}> Bán game này trên bot</label>
+ <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px"><label class="s"><span class="mu">Tên hiển thị trong bot</span><input class="in" style="${IW}" data-bg="name" maxlength="30" value="${esc(g.name)}" placeholder="${esc(g.label)}"></label>
+ <label class="s"><span class="mu">Link game (hiện sau khi mua key + dưới feedback)</span><input class="in" style="${IW}" data-bg="url" maxlength="300" value="${esc(g.url)}" placeholder="https://..."></label></div>
+ <div class="s mu" style="margin:10px 0 4px">Giá gốc (đ) — <b>0 = không bán gói đó</b></div>
+ <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px">${BT.days.map(d=>`<label class="s"><span class="mu">${DLB[d]||d+' ngày'}</span><input class="in" style="${IW}" type="number" min="0" max="100000000" step="1000" data-bp="${d}" value="${g.prices[d]}"></label>`).join('')}</div>
+ <div class="da" style="justify-content:flex-start"><button class="pr" data-a="tbsg" data-v="${esc(g.code)}">Lưu ${esc(g.label)}</button></div></div>`}
+function vBt(){if(!BT)return'<div class="keep" data-v="bt"><div class="em">Đang tải…</div></div>';
+ const seen=BT.seen&&BT.seen.t,st=!BT.bot_api?'<span class="bd ex">Chưa bật — đặt SUNVIW_BOT_SECRET</span>':seen&&now()-seen<120?`<span class="bd ok">Bot đang kết nối · ${esc(ago(seen))}</span>`:`<span class="bd wait">${seen?'Bot im lặng '+esc(ago(seen)):'Chưa thấy bot kết nối'}</span>`;
+ const dv=BT.cfg.bot_max_dev&&BT.cfg.bot_max_dev.v;
+ return `<div class="keep" data-v="bt"><div class="cd"><div class="hd"><h2>Bot Telegram</h2>${st}<button class="gh" data-a="tbrf">${I.rf}</button></div><div class="s mu" style="line-height:1.6">Giá, link game và cấu hình ở đây được bot tự đồng bộ sau vài giây. Key bot bán do chính hệ thống này sinh; <b>chỉ doanh thu bán qua bot được tính</b>. Khóa bí mật bot API đặt ở biến môi trường (không nằm ở panel).</div></div>
+ ${BT.games.map(btGame).join('')}
+ <div class="cd"><div class="hd"><h2>Cấu hình bot</h2></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px">${btField('bot_name','Tên bot hiển thị')}${btField('admin_ids','Chat ID admin chính (ID đầu = admin chính; nhiều ID cách nhau dấu phẩy)','8764934889')}${btField('cskh_username','CSKH @username','ten_cskh')}${btField('cskh_id','CSKH Chat ID (nếu không có username)')}${btField('min_deposit','Nạp tối thiểu (đ)','10000')}${btField('max_deposit','Nạp tối đa (đ)','50000000')}${btField('feedback_chat','Box feedback (ID -100… hoặc @kênh)')}${btField('feedback_thread','Box feedback · ID chủ đề (nếu bật Topics)')}${btField('notify_chat','Box thông báo nạp / mua (trống = dùng box feedback)')}${btField('notify_thread','Box thông báo · ID chủ đề')}${btField('bank_name','Ngân hàng')}${btField('bank_code','Mã ngân hàng (vd MB)')}${btField('bank_account','Số tài khoản')}${btField('bank_owner','Chủ tài khoản')}
+ <label class="s"><span class="mu">Số thiết bị cho mỗi key bán ra</span><select class="in" style="${IW}" data-bf="bot_max_dev">${BT.dev_options.map(n=>`<option value="${n}"${+(dv||1)===n?' selected':''}>${n} thiết bị</option>`).join('')}</select></label></div>
+ <div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:10px">${btBool('feedback_mask','Ẩn tên khách khi đăng feedback (D***)')}${btBool('use_dynamic_qr','QR động (tự điền số tiền + nội dung)')}</div>
+ <div class="s mu" style="margin-top:8px">Để trống 1 ô = bot dùng giá trị trong config.env của nó. Thông tin ngân hàng + admin chính chỉ admin chính sửa được.</div>
+ <div class="da" style="justify-content:flex-start"><button class="pr" data-a="tbsc">Lưu cấu hình</button></div></div></div>`}
+async function btAct(b){const a=b.dataset.a,v=b.dataset.v;
+ if(a==='tbrf'){await loadBt();return toast('Đã làm mới')}
+ if(a==='tbsg'){const c=document.querySelector('[data-g="'+v+'"]');if(!c)return;const prices={};c.querySelectorAll('[data-bp]').forEach(i=>{prices[i.dataset.bp]=i.value});
+  const body={game:v,sell:c.querySelector('[data-bg="sell"]').checked,name:c.querySelector('[data-bg="name"]').value.trim(),url:c.querySelector('[data-bg="url"]').value.trim(),prices};
+  b.disabled=true;const j=await api('/api/admin/bot/game',body);b.disabled=false;if(j.ok){BT=j;btShow();toast('Đã lưu '+v)}else toast(j.loi||'Lỗi',1);return}
+ if(a==='tbsc'){const cfg={};document.querySelectorAll('#vw [data-bf]').forEach(i=>{if(i.disabled)return;cfg[i.dataset.bf]=i.type==='checkbox'?i.checked:i.value.trim()});
+  b.disabled=true;const j=await api('/api/admin/bot/cfg',{cfg});b.disabled=false;if(j.ok){BT=j;btShow();toast('Đã lưu cấu hình bot')}else toast(j.loi||'Lỗi',1)}}
+const BST={queued:['wait','Đang chờ bot'],sending:['soon','Đang gửi'],done:['ok','Đã gửi'],cancel:['ex','Đã hủy'],stale:['ex','Gián đoạn']};
+function vBc(){if(!BC)return'<div class="keep" data-v="bc"><div class="em">Đang tải…</div></div>';
+ const seen=BC.seen&&BC.seen.t,live=seen&&now()-seen<120;
+ return `<div class="keep" data-v="bc"><div class="cd"><div class="hd"><h2>Thông báo tới toàn bot</h2>${!BC.bot_api?'<span class="bd ex">Bot API chưa bật</span>':live?'<span class="bd ok">Bot đang kết nối</span>':'<span class="bd wait">Bot chưa kết nối — tin sẽ gửi khi bot online</span>'}</div>
+ <div class="s mu" style="line-height:1.6">Gửi 1 tin nhắn tới <b>mọi khách đã từng /start bot</b>. Bot nhận và gửi trong vài giây (có giãn tốc độ để Telegram không chặn). Chỉ nhận chữ thuần — mã HTML không chạy được.</div>
+ <textarea class="in" id="bcx" maxlength="${BC.max}" rows="6" style="width:100%;margin-top:10px;resize:vertical" placeholder="Nội dung thông báo…">${esc(BCD)}</textarea>
+ <div class="da" style="justify-content:space-between"><span class="s mu" id="bcc">${BCD.length}/${BC.max}</span><button class="pr" data-a="brsend">Gửi tới toàn bot</button></div></div>
+ <div class="cd"><div class="hd"><h2>Lịch sử</h2><button class="gh" data-a="brrf">${I.rf}</button></div>${BC.items.length?BC.items.map(x=>{const s=BST[x.st]||['','?'];return `<div class="rw" style="grid-template-columns:minmax(0,1fr) auto;padding:10px 4px"><div><div class="kc"><span class="bd ${s[0]}">${s[1]}</span><span class="s mu">${esc(fmt(x.at))} · ${esc(x.by||'?')}${x.src==='bot'?' · gửi từ bot':''}</span>${x.st==='done'?`<span class="s">✅ ${x.sent}${x.failed?' · ❌ '+x.failed:''}</span>`:''}</div><div class="s" style="margin-top:4px;white-space:pre-wrap;word-break:break-word">${esc(x.text.length>220?x.text.slice(0,220)+'…':x.text)}</div></div>${x.st==='queued'?`<button class="gh dg" data-a="brx" data-v="${esc(x.id)}">Hủy</button>`:''}</div>`}).join(''):'<div class="em">Chưa gửi thông báo nào.</div>'}</div></div>`}
+async function brAct(b){const a=b.dataset.a;
+ if(a==='brrf'){await loadBc();return toast('Đã làm mới')}
+ if(a==='brx'){const j=await api('/api/admin/broadcast/cancel',{id:b.dataset.v});if(j.ok){BC=j;btShow();toast('Đã hủy')}else toast(j.loi||'Lỗi',1);return}
+ if(a==='brsend'){const t=($('#bcx')||{}).value||'';if(!t.trim())return toast('Chưa nhập nội dung',1);if(!await ask('Gửi thông báo này tới TOÀN BỘ khách của bot?','Gửi ngay'))return;b.disabled=true;const j=await api('/api/admin/broadcast/send',{text:t});b.disabled=false;if(j.ok){BCD='';BC=j;btShow();toast('Đã xếp hàng — bot sẽ gửi trong vài giây')}else toast(j.loi||'Lỗi',1)}}
+document.addEventListener('input',e=>{if(e.target.id==='bcx'){BCD=e.target.value;const c=$('#bcc');if(c)c.textContent=BCD.length+'/'+((BC&&BC.max)||3500)}});
+function pmBox(r){const cur=new Set(r.perms||[]);return `<h4>Quyền admin phụ${r.dung_boi?' · '+esc(r.dung_boi):''}</h4><div class="s mu" style="line-height:1.5">Tích quyền nào thì admin phụ này dùng được quyền đó ở <b>panel</b> và <b>bot</b> (áp dụng ngay, không cần đăng nhập lại). Mặc định: duyệt nạp · duyệt feedback · broadcast.</div><div id="pml" style="margin:8px 0">${PC.map(p=>`<label class="s" style="display:flex;gap:8px;align-items:flex-start;margin:6px 0"><input type="checkbox" data-pm="${esc(p.id)}"${cur.has(p.id)?' checked':''}><span>${esc(p.ten)} <span class="mu">· ${esc(p.noi)}${p.mac_dinh?' · mặc định':''}</span></span></label>`).join('')}</div><div class="tb"><input class="in" id="pmtg" inputmode="numeric" maxlength="15" placeholder="Chat ID Telegram" value="${esc(r.tg||'')}"><button class="pr" data-a="pms" data-k="${esc(r.key)}">Lưu quyền</button></div>`}
+async function pmAct(b){const k=b.dataset.k,perms=[...document.querySelectorAll('#dg [data-pm]')].filter(i=>i.checked).map(i=>i.dataset.pm),tg=(($('#pmtg')||{}).value||'').trim();
+ b.disabled=true;const j=await api('/api/admin/keys/perms',{key:k,perms,tg:tg||null});b.disabled=false;
+ if(j.ok){const r=KEYS.find(x=>x.key===k);if(r){r.perms=j.perms;r.tg=j.tg}toast('Đã lưu quyền');openKey(k)}else toast(j.loi||'Lỗi',1)}
+function vSales(){const a=(RV&&RV.gan_day)||[];return `<div class="cd"><div class="hd"><h2>Giao dịch bot gần đây</h2></div>${a.length?a.map(x=>`<div class="rw" style="grid-template-columns:minmax(0,1fr) auto;padding:8px 4px"><div><span class="bd g g-${esc(x.g)}">${esc(GL[x.g]||x.g)}</span> <span class="s">${esc(DL[x.d]||x.d+' ngày')}</span> <span class="s mu">· ${esc(fmt(x.t))} · Telegram ${esc(x.tg)}</span><div class="mono s mu" style="word-break:break-all">${esc(x.k)}</div></div><b class="${x.s==='gift'?'mu':''}">${x.s==='gift'?'tặng':vnd(x.p)}</b></div>`).join(''):'<div class="em">Chưa có giao dịch.</div>'}</div>`}
 /* ── thao tác ── */
 const UN={hour:3600,day:86400,week:604800,month:2592000},UL={hour:'giờ',day:'ngày',week:'tuần',month:'tháng'},acKey=k=>k?(k.length>16?k.slice(0,7)+'…'+k.slice(-4):k):'—';
 let ADDK=[];
@@ -7168,6 +8058,7 @@ async function addT(keys,amount,unit){const j=await api('/api/admin/keys/add-tim
  if(j.ok){for(const k in j.ket_qua){const r=KEYS.find(x=>x.key===k);if(r)Object.assign(r,j.ket_qua[k])}FL=new Set(Object.keys(j.ket_qua));paint();toast('Đã cộng '+norm(j.giay)+' cho '+j.da_cong+' key'+(j.bo_qua?' (bỏ qua '+j.bo_qua+')':''));return true}toast(j.loi||'Lỗi',1);return false}
 async function act(b){const d=b.dataset,a=d.a,k=d.k,w=d.w,v=d.v,tb=d.t;
   if(a&&a.slice(0,2)==='nt')return ntAct(b);
+  if(a&&a.slice(0,2)==='tb')return btAct(b);if(a&&a.slice(0,2)==='br')return brAct(b);if(a==='pms')return pmAct(b);
  if(a==='add'){const ok=await addT([k],+d.h,d.u||'hour'),dl=$('#dg');if(ok&&dl.open&&dl.dataset.k===k)openKey(k);return}
  if(a==='badd')return addT([...SEL],1,'hour');
  if(a==='addc')return openAdd([k]);if(a==='baddc')return openAdd([...SEL]);
@@ -7198,7 +8089,7 @@ async function act(b){const d=b.dataset,a=d.a,k=d.k,w=d.w,v=d.v,tb=d.t;
  if(a==='out'){try{await api('/api/admin/logout',{})}catch(e){}S=null;sessionStorage.removeItem('as');NEW=[];NT=null;return login0()}}
 document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const d=b.dataset;
  if(b.id==='go')return login();if(d.x==='c')return $('#dg').close();
- if(d.v&&b.classList.contains('n')){V=d.v;paint();scrollTo(0,0);return}
+ if(d.v&&b.classList.contains('n')){V=d.v;paint();scrollTo(0,0);if(V==='bt')loadBt();else if(V==='bc')loadBc();return}
  if(d.c){const m={type:'type',game:'game',days:'days',dev:'dev'}[d.c],val=isNaN(d.v)?d.v:+d.v;CF[m]=val;paint();return}
  if(d.f){F.t=d.f;paint();return}if(d.pf){PF=d.pf;paint();return}if(d.acf){ACF=d.acf;paint();return}
  if(d.a)act(b)});
@@ -7209,11 +8100,11 @@ document.addEventListener('change',e=>{const t=e.target;
  if(t.id==='sa'){vis().forEach(r=>t.checked?SEL.add(r.key):SEL.delete(r.key));paint();return}
  if(t.id==='fs'){F.s=t.value;paint();return}
  if(t.id==='au')prev();if(t.id==='cbu')cbPrev()});
-document.addEventListener('keydown',e=>{if(e.key==='Enter'&&['k','un'].includes(e.target.id))login();if(e.key==='/'&&$('#fq')&&!/INPUT|SELECT/.test(document.activeElement.tagName)){e.preventDefault();$('#fq').focus()}});
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&['k','un','tg'].includes(e.target.id))login();if(e.key==='/'&&$('#fq')&&!/INPUT|SELECT/.test(document.activeElement.tagName)){e.preventDefault();$('#fq').focus()}});
 try{document.documentElement.dataset.t=localStorage.getItem('th')||(matchMedia('(prefers-color-scheme:dark)').matches?'d':'l')}catch(e){}
 setInterval(()=>{if(!S||!$('#vw'))return;document.querySelectorAll('[data-l]').forEach(e=>{e.textContent=left(Math.max(0,+e.dataset.l-now()))})},15000);
 setInterval(()=>{if(S&&$('#vw')&&!document.hidden)loadKeys()},60000);
-setInterval(()=>{if(S&&isM()&&$('#vw')&&!document.hidden){loadPv();loadOs();if(V==='ac')loadAc();if(V==='nt')loadNt();if(RV&&RV.doanh_thu&&now()>=RV.doanh_thu.ngay.den&&now()-(RV._t||0)>20)loadRv()}},6000);
+setInterval(()=>{if(S&&$('#vw')&&!document.hidden){if(can('devices'))loadPv();if(can('offserver'))loadOs();if(V==='ac'&&can('autocuoc'))loadAc();if(V==='nt'&&can('notice'))loadNt();if(V==='bc'&&can('broadcast')&&document.activeElement&&document.activeElement.id!=='bcx')loadBc();if(can('revenue')&&RV&&RV.doanh_thu&&now()>=RV.doanh_thu.ngay.den&&now()-(RV._t||0)>20)loadRv()}},6000);
 if(S)boot();else login0();
 </script></body></html>
 """
@@ -7574,9 +8465,14 @@ def api_history_wipe():
     return _json({"ok": True, "da_xoa": done})
 
 
+HEALTH_PUBLIC = _env_bool("SUNVIW_HEALTH_PUBLIC", True)   # 0 = /health cũng 404 (chỉ đặt 0 nếu nền tảng KHÔNG dùng healthcheck đường này)
+
+
 @app.route("/health")
 def health_public():
     """Công khai (healthcheck / uptime monitor): CHỈ báo sống. Không lộ logic, cấu hình, đường dẫn, upstream, dự đoán chờ."""
+    if not HEALTH_PUBLIC:
+        abort(404)
     ensure_poller()
     return _json({"ok": True})
 
@@ -9412,7 +10308,7 @@ def _ab_get(sid):
 def tool_autocuoc():
     """Chỉ trả MÀN NHẬP KEY (không chứa giao diện auto cược). Nhập đúng key -> trình duyệt gọi /tool/autocuoc/ui kèm key để nhận giao diện."""
     if not AB_SERVE_UI:                                  # giao diện đã tách ra file autocuoc.html (host riêng) -> chuyển hướng sang AUTOBET_UI_URL
-        if AB_UI_URL:
+        if AB_UI_URL and AB_REDIRECT:
             resp = redirect(AB_UI_URL, 302)
             resp.headers["Cache-Control"] = "no-store"
             return resp
@@ -9782,8 +10678,9 @@ def _need_main_cuoc():
     s, err = _need_admin()
     if err:
         return None, err
-    if s["r"] != "main":
-        return None, _json({"ok": False, "loi": "chi admin chinh moi xem duoc trang thai cuoc"}, 403)
+    if not _has_perm(s, "autocuoc"):
+        _audit("perm_denied", role=s["r"], perm="autocuoc")
+        return None, _json({"ok": False, "loi": "khong co quyen xem trang thai cuoc"}, 403)
     return s, None
 
 
@@ -10609,6 +11506,10 @@ def _sec_report():
         w.append("MX_ACCESS_TOKEN chua dat -> access_token Max789 dang nam trong code")
     if not os.environ.get("AUTOBET_AT_TOKENS"):
         w.append("AUTOBET_AT_TOKENS chua dat -> token at dang nam trong code")
+    if not BOT_ENABLED:
+        w.append("SUNVIW_BOT_SECRET chua dat (>= 24 ky tu) -> bot Telegram KHONG mua key / lay gia duoc (moi duong bot = 404). Dat cung gia tri o Railway Variables va config.env cua bot")
+    elif not BOT_IPS:
+        w.append("SUNVIW_BOT_IPS chua dat -> bot API chi dua vao chu ky HMAC (da du an toan). Neu VPS cua bot co IP co dinh, dat SUNVIW_BOT_IPS=<ip> de them 1 lop khoa")
     if not AB_SERVE_UI and not AB_ALLOWED_ORIGINS:
         w.append("AUTOBET_SERVE_UI=0 nhung AUTOBET_UI_URL va AUTOBET_ALLOWED_ORIGINS deu trong -> file autocuoc.html KHONG goi duoc API (dat AUTOBET_UI_URL hoac AUTOBET_ALLOWED_ORIGINS=https://panel-cua-ban)")
     if "*" in AB_ALLOWED_ORIGINS:
