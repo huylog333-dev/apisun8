@@ -34,7 +34,7 @@ Endpoint:
     GET /api/admin/panel (+ POST /approve · /deny · /remove · /ban · /unban) -> admin CHÍNH xem + duyệt / từ chối / gỡ quyền / BAN (danh sách đen: chặn cả IP + thiết bị khỏi /api/html, trả 404) thiết bị vào panel (mục "Duyệt thiết bị vào panel HTML" ở trang /api/admin)
     GET|POST /api/admin/offserver -> OFF SERVER THEO TỪNG BÀN / GAME (CHỈ admin chính, tab "Off server" ở /api/admin): tắt bàn nào (Sun · Hit TX Thường · Hit TX MD5 · LC MD5 · LC Hũ) hay cả game (Sun · Hit · LC79) hay tất cả thì CHỈ tool dùng bàn đó nhận 503 {"server_off": true} và không có dự đoán — các bàn khác chạy bình thường; server + panel HTML (thiết bị đã duyệt / admin chính) vẫn cập nhật. POST {"tables":["lcmd5"],"off":true} | {"games":["lc79"],"off":true} | {"all":true,"off":false} (kiểu cũ {"off":true} = tất cả). Endpoint dự đoán LUÔN đòi key admin tạo + kiểm lại ngay trong view (xem khối "OFF SERVER"). Lưu file, còn sau restart
     GET /api/admin/cuocstatus    -> (admin CHÍNH) bảng TOÀN BỘ tài khoản đang / đã dùng auto cược; bấm 1 dòng xem hồ sơ: chiến thuật đã chọn, số dư, tổng lãi/lỗ, thắng/thua, tổng đã cược, log + ván gần nhất; POST /api/admin/cuocstatus/action {id, act: stop|remove}
-    BOT TELEGRAM (ẨN HOÀN TOÀN, xem khối "BOT TELEGRAM BÁN KEY"): /<slug-bí-mật>/{catalog,buy,seed,bc_claim,bc_done,bc_log} — slug suy ra từ SUNVIW_BOT_SECRET, mọi request ký HMAC, sai bất kỳ điều gì -> 404. Bot mua key + lấy giá / link game / cấu hình / danh sách admin ở đây.
+    BOT TELEGRAM (ẨN HOÀN TOÀN, xem khối "BOT TELEGRAM BÁN KEY"): /<slug-bí-mật>/{catalog,buy,keystat,seed,bc_claim,bc_done,bc_log} — slug suy ra từ SUNVIW_BOT_SECRET, mọi request ký HMAC, sai bất kỳ điều gì -> 404. Bot mua key + lấy giá / link game / cấu hình / danh sách admin ở đây.
     GET|POST /api/admin/bot (+ /game · /cfg) -> panel: giá gốc từng gói, link game, bán/ẩn game, cấu hình bot (CSKH, box feedback, nạp tối thiểu..., admin chính + ngân hàng CHỈ admin chính) — quyền botcfg
     GET|POST /api/admin/broadcast (+ /send · /cancel) -> gửi thông báo tới TOÀN BỘ khách của bot (bot nhận ở lần đồng bộ kế tiếp) — quyền broadcast
     POST /api/admin/keys/perms   -> CHỈ admin chính: đặt quyền + Chat ID Telegram cho 1 key admin phụ (xem khối "QUYỀN ADMIN PHỤ")
@@ -7224,6 +7224,37 @@ def _bot_op_buy(b):
         return _bot_buy_resp(rec, k, game, bd, False)
 
 
+def _bot_op_keystat(b):
+    """Bot hỏi hạn các key của 1 khách: {"tg": id, "keys": [...]} -> {"ok": True, "keys": {key: {exists, expired, activated, exp, left, days}}}.
+    Chỉ trả thông tin key do CHÍNH khách đó mua (btg khớp), key không phải của khách = exists False."""
+    try:
+        tg = int(b.get("tg"))
+    except (TypeError, ValueError):
+        return {"ok": False, "code": "bad_args"}
+    lst = b.get("keys")
+    if tg <= 0 or not isinstance(lst, list):
+        return {"ok": False, "code": "bad_args"}
+    now = int(time.time())
+    out = {}
+    with _kv_lock:
+        d = _kv_load()
+        for raw in lst[:300]:
+            k = _norm_key(raw)
+            r = d["keys"].get(k) if k else None
+            try:
+                mine = bool(r) and int(r.get("btg") or 0) == tg
+            except (TypeError, ValueError):
+                mine = False
+            if not mine:
+                out[str(raw)] = {"exists": False}
+                continue
+            act = _activated(r)
+            out[str(raw)] = {"exists": True, "expired": _is_expired(r, now), "activated": act,
+                             "exp": (int(r.get("exp") or 0) if act else None), "left": _left_sec(r, now),
+                             "days": int(r.get("days") or 0)}
+    return {"ok": True, "keys": out}
+
+
 def _bc_new(text, by, src, st="queued", sent=0, failed=0):
     it = {"id": secrets.token_hex(6), "text": text, "by": str(by or "")[:40], "src": src, "at": int(time.time()), "st": st, "sent": int(sent), "failed": int(failed)}
 
@@ -7293,7 +7324,7 @@ def _bot_op_bc_log(b):
     return {"ok": True}
 
 
-_BOT_OPS = {"catalog": _bot_op_catalog, "seed": _bot_op_seed, "buy": _bot_op_buy,
+_BOT_OPS = {"catalog": _bot_op_catalog, "seed": _bot_op_seed, "buy": _bot_op_buy, "keystat": _bot_op_keystat,
             "bc_claim": _bot_op_bc_claim, "bc_done": _bot_op_bc_done, "bc_log": _bot_op_bc_log}
 
 
