@@ -34,7 +34,7 @@ Endpoint:
     GET /api/admin/panel (+ POST /approve · /deny · /remove · /ban · /unban) -> admin CHÍNH xem + duyệt / từ chối / gỡ quyền / BAN (danh sách đen: chặn cả IP + thiết bị khỏi /api/html, trả 404) thiết bị vào panel (mục "Duyệt thiết bị vào panel HTML" ở trang /api/admin)
     GET|POST /api/admin/offserver -> OFF SERVER THEO TỪNG BÀN / GAME (CHỈ admin chính, tab "Off server" ở /api/admin): tắt bàn nào (Sun · Hit TX Thường · Hit TX MD5 · LC MD5 · LC Hũ) hay cả game (Sun · Hit · LC79) hay tất cả thì CHỈ tool dùng bàn đó nhận 503 {"server_off": true} và không có dự đoán — các bàn khác chạy bình thường; server + panel HTML (thiết bị đã duyệt / admin chính) vẫn cập nhật. POST {"tables":["lcmd5"],"off":true} | {"games":["lc79"],"off":true} | {"all":true,"off":false} (kiểu cũ {"off":true} = tất cả). Endpoint dự đoán LUÔN đòi key admin tạo + kiểm lại ngay trong view (xem khối "OFF SERVER"). Lưu file, còn sau restart
     GET /api/admin/cuocstatus    -> (admin CHÍNH) bảng TOÀN BỘ tài khoản đang / đã dùng auto cược; bấm 1 dòng xem hồ sơ: chiến thuật đã chọn, số dư, tổng lãi/lỗ, thắng/thua, tổng đã cược, log + ván gần nhất; POST /api/admin/cuocstatus/action {id, act: stop|remove}
-    BOT TELEGRAM (ẨN HOÀN TOÀN, xem khối "BOT TELEGRAM BÁN KEY"): /<slug-bí-mật>/{catalog,buy,keystat,seed,bc_claim,bc_done,bc_log} — slug suy ra từ SUNVIW_BOT_SECRET, mọi request ký HMAC, sai bất kỳ điều gì -> 404. Bot mua key + lấy giá / link game / cấu hình / danh sách admin ở đây.
+    BOT TELEGRAM (ẨN HOÀN TOÀN, xem khối "BOT TELEGRAM BÁN KEY"): /<slug-bí-mật>/{catalog,buy,mykeys,seed,bc_claim,bc_done,bc_log} — slug suy ra từ SUNVIW_BOT_SECRET, mọi request ký HMAC, sai bất kỳ điều gì -> 404. Bot mua key + lấy giá / link game / cấu hình / danh sách admin ở đây.
     GET|POST /api/admin/bot (+ /game · /cfg) -> panel: giá gốc từng gói, link game, bán/ẩn game, cấu hình bot (CSKH, box feedback, nạp tối thiểu..., admin chính + ngân hàng CHỈ admin chính) — quyền botcfg
     GET|POST /api/admin/broadcast (+ /send · /cancel) -> gửi thông báo tới TOÀN BỘ khách của bot (bot nhận ở lần đồng bộ kế tiếp) — quyền broadcast
     POST /api/admin/keys/perms   -> CHỈ admin chính: đặt quyền + Chat ID Telegram cho 1 key admin phụ (xem khối "QUYỀN ADMIN PHỤ")
@@ -7224,35 +7224,35 @@ def _bot_op_buy(b):
         return _bot_buy_resp(rec, k, game, bd, False)
 
 
-def _bot_op_keystat(b):
-    """Bot hỏi hạn các key của 1 khách: {"tg": id, "keys": [...]} -> {"ok": True, "keys": {key: {exists, expired, activated, exp, left, days}}}.
-    Chỉ trả thông tin key do CHÍNH khách đó mua (btg khớp), key không phải của khách = exists False."""
+def _bot_op_mykeys(b):
+    """Bot hỏi hạn các key khách đã mua (nút "Game đã mua key"). CHỈ trả key do bot cấp đúng cho khách `tg`;
+    key đã bị xóa khỏi kho thì không có trong kết quả. a = đã kích hoạt, e = hạn (giây epoch, 0 nếu chưa kích hoạt),
+    l = số giây còn lại (chưa kích hoạt = trọn gói), x = 1 nếu đã hết hạn."""
     try:
         tg = int(b.get("tg"))
     except (TypeError, ValueError):
         return {"ok": False, "code": "bad_args"}
-    lst = b.get("keys")
-    if tg <= 0 or not isinstance(lst, list):
+    ks = b.get("keys")
+    if tg <= 0 or not isinstance(ks, list):
         return {"ok": False, "code": "bad_args"}
     now = int(time.time())
     out = {}
     with _kv_lock:
         d = _kv_load()
-        for raw in lst[:300]:
-            k = _norm_key(raw)
-            r = d["keys"].get(k) if k else None
+        for k in ks[:200]:
+            r = d["keys"].get(k) if isinstance(k, str) else None
+            if not isinstance(r, dict):
+                continue
             try:
-                mine = bool(r) and int(r.get("btg") or 0) == tg
+                owner = int(r.get("btg") or 0)
             except (TypeError, ValueError):
-                mine = False
-            if not mine:
-                out[str(raw)] = {"exists": False}
+                owner = 0
+            if owner != tg and r.get("note") != f"tg:{tg}":
                 continue
             act = _activated(r)
-            out[str(raw)] = {"exists": True, "expired": _is_expired(r, now), "activated": act,
-                             "exp": (int(r.get("exp") or 0) if act else None), "left": _left_sec(r, now),
-                             "days": int(r.get("days") or 0)}
-    return {"ok": True, "keys": out}
+            out[k] = {"g": _key_game(r), "d": int(r.get("days") or 0), "a": 1 if act else 0,
+                      "e": int(r.get("exp") or 0) if act else 0, "l": _left_sec(r, now), "x": 1 if _is_expired(r, now) else 0}
+    return {"ok": True, "now": now, "keys": out}
 
 
 def _bc_new(text, by, src, st="queued", sent=0, failed=0):
@@ -7324,7 +7324,7 @@ def _bot_op_bc_log(b):
     return {"ok": True}
 
 
-_BOT_OPS = {"catalog": _bot_op_catalog, "seed": _bot_op_seed, "buy": _bot_op_buy, "keystat": _bot_op_keystat,
+_BOT_OPS = {"catalog": _bot_op_catalog, "seed": _bot_op_seed, "buy": _bot_op_buy, "mykeys": _bot_op_mykeys,
             "bc_claim": _bot_op_bc_claim, "bc_done": _bot_op_bc_done, "bc_log": _bot_op_bc_log}
 
 
@@ -8044,7 +8044,7 @@ function vBt(){if(!BT)return'<div class="keep" data-v="bt"><div class="em">Đang
  ${BT.games.map(btGame).join('')}
  <div class="cd"><div class="hd"><h2>Cấu hình bot</h2></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px">${btField('bot_name','Tên bot hiển thị')}${btField('admin_ids','Chat ID admin chính (ID đầu = admin chính; nhiều ID cách nhau dấu phẩy)','8764934889')}${btField('cskh_username','CSKH @username','ten_cskh')}${btField('cskh_id','CSKH Chat ID (nếu không có username)')}${btField('min_deposit','Nạp tối thiểu (đ)','10000')}${btField('max_deposit','Nạp tối đa (đ)','50000000')}${btField('feedback_chat','Box feedback (ID -100… hoặc @kênh)')}${btField('feedback_thread','Box feedback · ID chủ đề (nếu bật Topics)')}${btField('notify_chat','Box thông báo nạp / mua (trống = dùng box feedback)')}${btField('notify_thread','Box thông báo · ID chủ đề')}${btField('bank_name','Ngân hàng')}${btField('bank_code','Mã ngân hàng (vd MB)')}${btField('bank_account','Số tài khoản')}${btField('bank_owner','Chủ tài khoản')}
  <label class="s"><span class="mu">Số thiết bị cho mỗi key bán ra</span><select class="in" style="${IW}" data-bf="bot_max_dev">${BT.dev_options.map(n=>`<option value="${n}"${+(dv||1)===n?' selected':''}>${n} thiết bị</option>`).join('')}</select></label></div>
- <div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:10px">${btBool('feedback_mask','Ẩn tên khách khi đăng feedback (D***)')}${btBool('use_dynamic_qr','QR động (tự điền số tiền + nội dung)')}</div>
+ <div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:10px">${btBool('feedback_mask','Ẩn tên khách khi đăng feedback (D***)')}</div>
  <div class="s mu" style="margin-top:8px">Để trống 1 ô = bot dùng giá trị trong config.env của nó. Thông tin ngân hàng + admin chính chỉ admin chính sửa được.</div>
  <div class="da" style="justify-content:flex-start"><button class="pr" data-a="tbsc">Lưu cấu hình</button></div></div></div>`}
 async function btAct(b){const a=b.dataset.a,v=b.dataset.v;
