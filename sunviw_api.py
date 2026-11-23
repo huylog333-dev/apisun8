@@ -460,7 +460,7 @@ def _norm_data_win(v):
 
 DATA_WIN_SEM = 2   # phiên bản cách tính DATA_WIN (1 = cũ: DATA_WIN chỉ là trần, logic nhỏ hơn giữ cửa sổ riêng · 2 = mới: DATA_WIN > 0 thì MỌI logic đọc đúng DATA_WIN ván). Ván lưu theo cách cũ (không có dwv) sẽ được chạy lại logic khi bấm "Tính lại theo config"
 
-DATA_WIN = _norm_data_win(_env_num("SUNVIW_DATA_WIN", 0, int))   # ◄◄ SUN: số ván gần nhất dùng làm data (0 = không giới hạn · vd. 300) — cfg.DATA_WIN của SUN đọc biến này
+DATA_WIN = _norm_data_win(_env_num("SUNVIW_DATA_WIN", 400, int))   # ◄◄ SUN: số ván gần nhất dùng làm data (0 = không giới hạn · vd. 300) — cfg.DATA_WIN của SUN đọc biến này
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  ⚙  CONFIG WR CÓ TRỌNG SỐ (KIỂU "PHẢN ỨNG NHANH + SÀN NHỚ CẦU CŨ")  —  CHỈNH Ở ĐÂY
@@ -661,7 +661,7 @@ HIT_TXTHUONG_CFG = TableCfg("hittxthuong", _hit_env("HITTXTHUONG_", {
     "GID": "vgmn_100",
     "POLL_SEC": 3.0,
     "HIST_KEEP": HIST_KEEP,
-    "DATA_WIN": 0,   # ◄◄ số ván gần nhất dùng làm data của RIÊNG bàn này (0 = không giới hạn · vd. 300 · tối thiểu 40) — đổi xong bấm "Tính lại theo config" ở panel
+    "DATA_WIN": 500,   # ◄◄ số ván gần nhất dùng làm data của RIÊNG bàn này (0 = không giới hạn · vd. 300 · tối thiểu 40) — đổi xong bấm "Tính lại theo config" ở panel
     "TIE_LOGIC": "AFM",
     "CONSEC_CHECK": True,
     # WR có trọng số
@@ -689,7 +689,7 @@ HIT_TXMD5_CFG = TableCfg("hittxmd5", _hit_env("HITTXMD5_", {
     "GID": "vgmn_101",
     "POLL_SEC": 3.0,
     "HIST_KEEP": HIST_KEEP,
-    "DATA_WIN": 0,   # ◄◄ số ván gần nhất dùng làm data của RIÊNG bàn này (0 = không giới hạn · vd. 300 · tối thiểu 40) — đổi xong bấm "Tính lại theo config" ở panel
+    "DATA_WIN": 350,   # ◄◄ số ván gần nhất dùng làm data của RIÊNG bàn này (0 = không giới hạn · vd. 300 · tối thiểu 40) — đổi xong bấm "Tính lại theo config" ở panel
     "TIE_LOGIC": "AFM",
     "CONSEC_CHECK": True,
     # WR có trọng số
