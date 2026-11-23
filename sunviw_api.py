@@ -3,9 +3,9 @@
 SUNVIW - API JSON.  SUN: 13 LOGIC DỰ ĐOÁN (SEQ13v6) dựa trên CHUỖI TÀI/XỈU + XÚC XẮC + TỔNG gần nhất (KHÔNG dùng MD5) · HITCLUB: 2 bàn (TX thường + TX MD5) dùng cùng bộ 13 logic
 
 Chạy:
-    pip install flask
+    pip install flask websocket-client          # websocket-client: nguồn SUN = WebSocket Sun.Win trực tiếp (cùng thư viện auto cược LC79 đang dùng)
     python sunviw_api.py                      # mặc định http://0.0.0.0:5000
-    python sunviw_api.py --port 8080 --upstream https://xxx.trycloudflare.com/api/tx
+    python sunviw_api.py --port 8080
     python sunviw_api.py --flip               # BẬT bẻ final của SUN (mặc định TẮT; hoặc SUNVIW_FLIP=1, hoặc sửa FLIP_FINAL_DEFAULT)
     python sunviw_api.py --wr-flip            # BẬT FLIP TRỌNG SỐ WR của SUN: ván CŨ nhất nặng nhất -> giảm dần tới ván MỚI nhất (--no-wr-flip = tắt; hoặc SUNVIW_WR_FLIP=1|0, hoặc sửa WR_FLIP_WEIGHT_DEFAULT)
     python sunviw_api.py --no-af              # TẮT AF của SUN (--af = bật · --af-low 37 / --af-high 63 = ngưỡng bẻ logic · --af-min 13 = số ván tối thiểu · --af-mode-window 7 / --af-mode-below 45 = bẻ theo WR chế độ · --af-flip / --af-no-flip = bẻ riêng AF)
@@ -63,7 +63,7 @@ JSON /api/predict:
       "so_van_wr": 9,            # số ván thực tế đã dùng để tính WR / độ tin cậy
       "tool_dung_sai_10_van": {"dung": 6, "sai": 4, "tong": 10, "chuoi": "✅❌✅✅❌✅❌✅✅❌"},
                                  # đúng/sai của du_doan ở 10 phiên gần nhất (theo be_final hiện tại), chuoi: mới -> cũ, ✅ = đúng · ❌ = sai (đổi icon ở ICON_DUNG / ICON_SAI)
-      "stale": false,            # true nếu lần quét upstream gần nhất bị lỗi (đang trả kết quả cũ)
+      "stale": false,            # true nếu nguồn SUN (WebSocket Sun.Win) đang mất kết nối / im lặng / lỗi (đang trả kết quả cũ)
       "cap_nhat": "2026-10-09 12:30:01"
     }
 
@@ -139,7 +139,7 @@ JSON /api/predict:
     Data lưu RIÊNG: <DATA_DIR>/hit15_txthuong.json và <DATA_DIR>/hit15_txmd5.json (mỗi file = lịch sử xúc xắc + các ván đã chấm của bàn đó). Panel /api/html có thêm 2 tab "Hit Thường" · "Hit MD5".
     Tắt: HITCLUB=0 hoặc --no-hit. Đổi config không sửa file: biến môi trường HITTXTHUONG_<TÊN> / HITTXMD5_<TÊN> (vd. HITTXMD5_AF_ENABLED=0).
 
-Server quét upstream nền mỗi POLL_SEC giây, chỉ tính lại khi có phiên mới -> request của HTML trả về tức thì.
+SUN: server tự nối WebSocket Sun.Win (khối "CONFIG NGUỒN SUN.WIN" + class SunAuth / SunFeed) rồi lấy phiên mới nền mỗi POLL_SEC giây, chỉ tính lại khi có phiên mới -> request của HTML trả về tức thì.
 """
 import argparse
 import atexit
@@ -158,6 +158,8 @@ import sys
 import threading
 import time
 import unicodedata
+import urllib.error
+import urllib.parse
 import urllib.request
 from fractions import Fraction
 
@@ -326,14 +328,8 @@ af_apply_limits()
 
 
 # ─── CẤU HÌNH ────────────────────────────────────────────────────────────
-# Upstream MỚI: /api/tx chỉ trả 1 PHIÊN MỚI NHẤT dạng 1 object:
-#   {"ket_qua":"Tài","phien":3284075,"thoi_gian":"11-10-2026 13:50:38 UTC+7","tong":15,"xuc_xac_1":6,"xuc_xac_2":3,"xuc_xac_3":6}
-# -> tool quét 1 phiên gần nhất mỗi lần, tự tích lũy vào lịch sử (HIST_PATH) để phần WR vẫn có ván để chấm.
-UPSTREAM_URL = os.environ.get(
-    "SUNVIW_UPSTREAM",
-    "https://well-summary-oclc-invisible.trycloudflare.com/api/tx",
-)
-UPSTREAM_TIMEOUT = 9      # giây
+# NGUỒN SUN = WebSocket Sun.Win trực tiếp (khối "CONFIG NGUỒN SUN.WIN" bên dưới) — không còn API ngoài. Mỗi phiên nhận được tự tích lũy vào lịch sử (HIST_PATH) để phần WR có ván để chấm.
+UPSTREAM_TIMEOUT = 9      # giây — timeout HTTP chung của các bàn HITCLUB / LC / BetVip / Max789 (SUN không dùng)
 # THƯ MỤC LƯU DỮ LIỆU BỀN: Railway gắn Volume thì tự đặt RAILWAY_VOLUME_MOUNT_PATH (vd. /data) -> mọi file lưu (lịch sử, graded, key, IP...)
 # nằm trong Volume nên KHÔNG MẤT sau mỗi lần deploy / restart. Không có Volume (chạy máy local) -> dùng /tmp như cũ.
 # Muốn tự chọn thư mục: đặt SUNVIW_DATA_DIR. Từng file vẫn ghi đè riêng được bằng SUNVIW_HIST / SUNVIW_PERSIST / SUNVIW_KEYS_PATH / SUNVIW_IPS_PATH.
@@ -389,8 +385,54 @@ BOOT_INFO = _boot_mark()
 
 HIST_PATH = os.environ.get("SUNVIW_HIST", _data_path("sun15_hist.json"))   # lịch sử các phiên đã quét (tool tự tích lũy)
 HIST_KEEP = int(os.environ.get("SUNVIW_HIST_KEEP", "5000") or 5000)   # CỬA SỔ TRƯỢT 5000 VÁN / BÀN: mỗi bàn của mỗi game lưu tối đa 5000 phiên GẦN NHẤT (RAM + file) — có phiên thứ 5001 thì phiên cũ nhất bị bỏ. Số ván DÙNG LÀM DATA do DATA_WIN quyết định (bên dưới). Đổi: env SUNVIW_HIST_KEEP (⚠ nếu Railway Variables đang có SUNVIW_HIST_KEEP=600 thì xoá / sửa, env ghi đè số này)
-POLL_SEC = 3.0             # chu kỳ quét upstream (giống AUTO_INTERVAL_MS của HTML)
+POLL_SEC = 3.0             # chu kỳ lấy phiên mới từ bộ đệm WebSocket Sun.Win -> chỉ tính lại khi có phiên mới
 WR_MIN_GAMES = 1           # số ván đã chấm tối thiểu để dùng WR (dưới mức này -> đa số 21 logic)
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  🌞  CONFIG NGUỒN SUN.WIN  —  WEBSOCKET TRỰC TIẾP + TỰ ĐĂNG NHẬP / TỰ ĐỔI TOKEN  (thay cho API ngoài "UPSTREAM" cũ)
+# ═══════════════════════════════════════════════════════════════════════════
+#   Tool tự nối WebSocket vào Sun.Win, nhận cmd 1008 (phiên mới) + cmd 1003 (kết quả xúc xắc) rồi gộp THẲNG vào lịch sử SUN — KHÔNG còn gọi API trung gian nào.
+#   Logic port từ apitxsun.py (class SunAuth = tự đăng nhập / đổi token · class SunFeed = WebSocket + watchdog), nằm ngay trước khối "TRẠNG THÁI NỀN".
+#   Cần thư viện:  pip install websocket-client   (thiếu -> nguồn SUN không chạy, /api/admin/health báo rõ).
+#   ⚠ Chạy gunicorn BẮT BUỘC --workers 1 (mỗi worker sẽ mở thêm 1 kết nối WebSocket riêng).
+#   Nên đặt các giá trị nhạy cảm bằng biến môi trường (Railway -> Variables) thay vì để cứng trong file:
+#       SUNWIN_WS_URL · SUNWIN_INFO · SUNWIN_SIGNATURE · SUNWIN_REFRESH_TOKEN · SUNWIN_USERNAME · SUNWIN_PASSWORD
+#   Tắt hẳn nguồn SUN: SUNWIN_ENABLED=0.  Phiên đăng nhập đang giữ (tự đổi token) lưu ở <DATA_DIR>/sunwin_session.json (đổi: SUNWIN_SESSION_FILE).
+SUNWIN_ENABLED = _env_bool("SUNWIN_ENABLED", True)
+SUN_WS_URL = os.environ.get("SUNWIN_WS_URL", 'wss://websocket.azhkthg1.net/websocket?token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJhbW91bnQiOjAsInVzZXJuYW1lIjoiU0NfYXBpc3Vud2luMTIzIn0.hgrRbSV6vnBwJMg9ZFtbx3rRu9mX_hZMZ_m5gMNhkw0')
+SUNWIN_INFO = os.environ.get("SUNWIN_INFO", '{"ipAddress":"113.185.45.88","wsToken":"eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJnZW5kZXIiOjAsImNhblZpZXdTdGF0IjpmYWxzZSwiZGlzcGxheU5hbWUiOiJwbGFtYW1hIiwiYm90IjowLCJpc01lcmNoYW50IjpmYWxzZSwidmVyaWZpZWRCYW5rQWNjb3VudCI6ZmFsc2UsInBsYXlFdmVudExvYmJ5IjpmYWxzZSwiY3VzdG9tZXJJZCI6MzMxNDgxMTYyLCJhZmZJZCI6IkdFTVdJTiIsImJhbm5lZCI6ZmFsc2UsImJyYW5kIjoiZ2VtIiwidGltZXN0YW1wIjoxNzY2NDc0NzgwMDA2LCJsb2NrR2FtZXMiOltdLCJhbW91bnQiOjAsImxvY2tDaGF0IjpmYWxzZSwicGhvbmVWZXJpZmllZCI6ZmFsc2UsImlwQWRkcmVzcyI6IjExMy4xODUuNDUuODgiLCJtdXRlIjpmYWxzZSwiYXZhdGFyIjoiaHR0cHM6Ly9pbWFnZXMuc3dpbnNob3AubmV0L2ltYWdlcy9hdmF0YXIvYXZhdGFyXzE4LnBuZyIsInBsYXRmb3JtSWQiOjUsInVzZXJJZCI6IjZhOGI0ZDM4LTFlYzEtNDUxYi1hYTA1LWYyZDkwYWFhNGM1MCIsInJlZ1RpbWUiOjE3NjY0NzQ3NTEzOTEsInBob25lIjoiIiwiZGVwb3NpdCI6ZmFsc2UsInVzZXJuYW1lIjoiR01fYXBpdm9wbmhhYW4ifQ.YFOscbeojWNlRo7490BtlzkDGYmwVpnlgOoh04oCJy4","locale":"vi","userId":"6a8b4d38-1ec1-451b-aa05-f2d90aaa4c50","username":"GM_apivopnhaan","timestamp":1766474780007,"refreshToken":"63d5c9be0c494b74b53ba150d69039fd.7592f06d63974473b4aaa1ea849b2940"}')
+SUNWIN_SIGNATURE = os.environ.get("SUNWIN_SIGNATURE", '66772A1641AA8B18BD99207CE448EA00ECA6D8A4D457C1FF13AB092C22C8DECF0C0014971639A0FBA9984701A91FCCBE3056ABC1BE1541D1C198AA18AF3C45595AF6601F8B048947ADF8F48A9E3E074162F9BA3E6C0F7543D38BD54FD4C0A2C56D19716CC5353BBC73D12C3A92F78C833F4EFFDC4AB99E55C77AD2CDFA91E296')
+SUN_WS_BASE_URL = SUN_WS_URL.split("?")[0]
+
+SUN_WS_ORIGIN = "https://play.sun.win"
+SUN_WS_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+             "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
+SUN_RECONNECT_DELAY = 2.5   # giây
+SUN_PING_INTERVAL = 15      # giây
+SUN_PING_TIMEOUT = 10       # giây (phải nhỏ hơn SUN_PING_INTERVAL)
+SUN_SEND_GAP = 0.6          # giây giữa các message khởi tạo
+
+# ---- AUTO LOGIN: tự đăng nhập + tự thay token ----
+SUNWIN_AUTO_LOGIN = _env_bool("SUNWIN_AUTO_LOGIN", True)
+SUNWIN_USERNAME = os.environ.get("SUNWIN_USERNAME", 'Dark1382')
+SUNWIN_PASSWORD = os.environ.get("SUNWIN_PASSWORD", 'D1382010')
+# Địa chỉ API đăng nhập (IDdomainURL của web). Để TRỐNG = tự tìm giống web: cfg.azhkthg1.com/distributor -> acs?command=get-bid -> config.services.id
+SUNWIN_AUTH_URL = os.environ.get("SUNWIN_AUTH_URL", "")
+SUNWIN_HOST_DOMAIN = os.environ.get("SUNWIN_HOST_DOMAIN", "https://cfg.azhkthg1.com/")
+SUNWIN_AUTH_ORIGIN = os.environ.get("SUNWIN_AUTH_ORIGIN", "https://web.sunwin.osaka")
+SUNWIN_BUNDLE_ID = "com.gamebai.sunclub"
+SUNWIN_APP_NAME = "sunprod"
+SUNWIN_CONFIG_VERSION = 20   # gameConfigVersionWeb của web client v3.6.3
+SUNWIN_PLATFORM_ID = _env_num("SUNWIN_PLATFORM_ID", 4, int)   # 4 = web desktop
+# (Tuỳ chọn) refreshToken lấy từ trình duyệt để nạp lần đầu, khi chưa có phiên đã lưu.
+SUNWIN_REFRESH_TOKEN = os.environ.get("SUNWIN_REFRESH_TOKEN", 'fadc9833668142c7971458fc56575298.cfd931db0da94f8fb4d63c2ca4e5f7f1')
+SUNWIN_SESSION_FILE = os.environ.get("SUNWIN_SESSION_FILE", _data_path("sunwin_session.json"))
+SUN_REFRESH_MARGIN = 300     # giây: đổi token trước khi hết hạn 5 phút
+SUN_MIN_RENEW_GAP = 60       # giây: tối thiểu giữa 2 lần đổi token (chống lặp vô hạn)
+SUN_STALE_AFTER = 180        # giây: không có dữ liệu ván mới trong chừng này -> reconnect
+SUN_RECONNECT_AFTER_RENEW = _env_bool("RECONNECT_AFTER_RENEW", True)
+# Token trên URL websocket: "auto" (tự thử wsToken mới <-> token cố định), "fresh", "static"
+SUN_WS_TOKEN_MODE = os.environ.get("SUNWIN_WS_TOKEN_MODE", "auto")
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  📚  CONFIG SỐ VÁN DÙNG LÀM DATA (DATA_WIN)  —  MỖI BÀN MỘT SỐ RIÊNG, GHI NGAY TRONG KHỐI CONFIG CỦA BÀN
@@ -557,7 +599,7 @@ class TableCfg:
 
 # ─── PANEL /api/html ─────────────────────────────────────────────────────
 PANEL_DEFAULT_SHOW = 30    # số ván lịch sử panel hiện mặc định (đổi trực tiếp trên panel, trình duyệt nhớ lại)
-HIST_MAX = 300             # trần số ván lịch sử cho ?hist=N và ô nhập trên panel
+HIST_MAX = 700             # trần số ván lịch sử cho ?hist=N và ô nhập trên panel
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  🎯  CONFIG HITCLUB (GAME 3 · 2 BÀN)  —  MỖI BÀN MỘT BỘ CONFIG RIÊNG  —  CHỈNH Ở ĐÂY
@@ -783,7 +825,7 @@ BV_MD5_CFG = TableCfg("betvipmd5", _hit_env("BVMD5_", {
     "GID": "bv_md5",
     "POLL_SEC": 3.0,
     "HIST_KEEP": HIST_KEEP,
-    "DATA_WIN": 120,   # ◄◄ số ván gần nhất dùng làm data của RIÊNG bàn này (0 = không giới hạn · vd. 300 · tối thiểu 40) — đổi xong bấm "Tính lại theo config" ở panel
+    "DATA_WIN": 350,   # ◄◄ số ván gần nhất dùng làm data của RIÊNG bàn này (0 = không giới hạn · vd. 300 · tối thiểu 40) — đổi xong bấm "Tính lại theo config" ở panel
     "TIE_LOGIC": "AFM",
     "CONSEC_CHECK": True,
     # WR có trọng số
@@ -800,7 +842,7 @@ BV_MD5_CFG = TableCfg("betvipmd5", _hit_env("BVMD5_", {
     # AF: bước 3 bẻ theo WR chế độ (WR chế độ < AF_MODE_BELOW % -> đảo final TÀI<->XỈU)
     "AF_MODE_FLIP": False, "AF_MODE_WINDOW": 9, "AF_MODE_MIN": 7, "AF_MODE_BELOW": 45,
     # AF: bẻ final riêng
-    "AF_FLIP_FINAL": False, "AF_FLIP_FINAL_CT": False, "AF_FLIP_FINAL_CAO": False, "AF_FLIP_FINAL_THAP": False, "AF_FLIP_FINAL_ALL": True,
+    "AF_FLIP_FINAL": False, "AF_FLIP_FINAL_CT": False, "AF_FLIP_FINAL_CAO": True, "AF_FLIP_FINAL_THAP": True, "AF_FLIP_FINAL_ALL": True,
     # đánh giá đúng/sai + số ván lưu
     "EVAL_WINDOW": 500, "PERSIST_KEEP": 300,
 }))
@@ -811,7 +853,7 @@ BV_HU_CFG = TableCfg("betviphu", _hit_env("BVHU_", {
     "GID": "bv_hu",
     "POLL_SEC": 3.0,
     "HIST_KEEP": HIST_KEEP,
-    "DATA_WIN": 0,   # ◄◄ số ván gần nhất dùng làm data của RIÊNG bàn này (0 = không giới hạn · vd. 300 · tối thiểu 40) — đổi xong bấm "Tính lại theo config" ở panel
+    "DATA_WIN": 370,   # ◄◄ số ván gần nhất dùng làm data của RIÊNG bàn này (0 = không giới hạn · vd. 300 · tối thiểu 40) — đổi xong bấm "Tính lại theo config" ở panel
     "TIE_LOGIC": "AFM",
     "CONSEC_CHECK": True,
     # WR có trọng số
@@ -828,7 +870,7 @@ BV_HU_CFG = TableCfg("betviphu", _hit_env("BVHU_", {
     # AF: bước 3 bẻ theo WR chế độ (WR chế độ < AF_MODE_BELOW % -> đảo final TÀI<->XỈU)
     "AF_MODE_FLIP": False, "AF_MODE_WINDOW": 9, "AF_MODE_MIN": 7, "AF_MODE_BELOW": 45,
     # AF: bẻ final riêng
-    "AF_FLIP_FINAL": False, "AF_FLIP_FINAL_CT": False, "AF_FLIP_FINAL_CAO": False, "AF_FLIP_FINAL_THAP": True, "AF_FLIP_FINAL_ALL": True,
+    "AF_FLIP_FINAL": False, "AF_FLIP_FINAL_CT": False, "AF_FLIP_FINAL_CAO": False, "AF_FLIP_FINAL_THAP": False, "AF_FLIP_FINAL_ALL": True,
     # đánh giá đúng/sai + số ván lưu
     "EVAL_WINDOW": 500, "PERSIST_KEEP": 300,
 }))
@@ -865,7 +907,7 @@ MX_MD5_CFG = TableCfg("max789md5", _hit_env("MXMD5_", {
     "GID": "mx_md5",
     "POLL_SEC": 3.0,
     "HIST_KEEP": HIST_KEEP,
-    "DATA_WIN": 0,   # ◄◄ số ván gần nhất dùng làm data của RIÊNG bàn này (0 = không giới hạn · vd. 300 · tối thiểu 40) — đổi xong bấm "Tính lại theo config" ở panel
+    "DATA_WIN": 250,   # ◄◄ số ván gần nhất dùng làm data của RIÊNG bàn này (0 = không giới hạn · vd. 300 · tối thiểu 40) — đổi xong bấm "Tính lại theo config" ở panel
     "TIE_LOGIC": "AFM",
     "CONSEC_CHECK": True,
     # WR có trọng số
@@ -882,7 +924,7 @@ MX_MD5_CFG = TableCfg("max789md5", _hit_env("MXMD5_", {
     # AF: bước 3 bẻ theo WR chế độ (WR chế độ < AF_MODE_BELOW % -> đảo final TÀI<->XỈU)
     "AF_MODE_FLIP": False, "AF_MODE_WINDOW": 9, "AF_MODE_MIN": 7, "AF_MODE_BELOW": 45,
     # AF: bẻ final riêng
-    "AF_FLIP_FINAL": False, "AF_FLIP_FINAL_CT": False, "AF_FLIP_FINAL_CAO": True, "AF_FLIP_FINAL_THAP": False, "AF_FLIP_FINAL_ALL": False,
+    "AF_FLIP_FINAL": False, "AF_FLIP_FINAL_CT": False, "AF_FLIP_FINAL_CAO": False, "AF_FLIP_FINAL_THAP": False, "AF_FLIP_FINAL_ALL": True,
     # đánh giá đúng/sai + số ván lưu
     "EVAL_WINDOW": 500, "PERSIST_KEEP": 300,
 }))
@@ -893,7 +935,7 @@ MX_HU_CFG = TableCfg("max789hu", _hit_env("MXHU_", {
     "GID": "mx_hu",
     "POLL_SEC": 3.0,
     "HIST_KEEP": HIST_KEEP,
-    "DATA_WIN": 0,   # ◄◄ số ván gần nhất dùng làm data của RIÊNG bàn này (0 = không giới hạn · vd. 300 · tối thiểu 40) — đổi xong bấm "Tính lại theo config" ở panel
+    "DATA_WIN": 150,   # ◄◄ số ván gần nhất dùng làm data của RIÊNG bàn này (0 = không giới hạn · vd. 300 · tối thiểu 40) — đổi xong bấm "Tính lại theo config" ở panel
     "TIE_LOGIC": "AFM",
     "CONSEC_CHECK": True,
     # WR có trọng số
@@ -910,7 +952,7 @@ MX_HU_CFG = TableCfg("max789hu", _hit_env("MXHU_", {
     # AF: bước 3 bẻ theo WR chế độ (WR chế độ < AF_MODE_BELOW % -> đảo final TÀI<->XỈU)
     "AF_MODE_FLIP": False, "AF_MODE_WINDOW": 9, "AF_MODE_MIN": 7, "AF_MODE_BELOW": 45,
     # AF: bẻ final riêng
-    "AF_FLIP_FINAL": False, "AF_FLIP_FINAL_CT": False, "AF_FLIP_FINAL_CAO": False, "AF_FLIP_FINAL_THAP": True, "AF_FLIP_FINAL_ALL": True,
+    "AF_FLIP_FINAL": False, "AF_FLIP_FINAL_CT": False, "AF_FLIP_FINAL_CAO": False, "AF_FLIP_FINAL_THAP": True, "AF_FLIP_FINAL_ALL": False,
     # đánh giá đúng/sai + số ván lưu
     "EVAL_WINDOW": 500, "PERSIST_KEEP": 300,
 }))
@@ -2851,51 +2893,13 @@ def be_final_g(g, cfg=SUN):
     return af_flip_applies(g.get("mode"), cfg) if g.get("af", False) else bool(cfg.FLIP_FINAL)
 
 
-# ─── LỊCH SỬ UPSTREAM ────────────────────────────────────────────────────
+# ─── LỊCH SỬ SUN ────────────────────────────────────────────────────
 def _parse_int(v):
     m = re.match(r"\s*[+-]?\d+", str(v))
     return int(m.group()) if m else None
 
 
-def norm_kq(s):
-    t = unicodedata.normalize("NFD", str(s or ""))
-    t = "".join(ch for ch in t if unicodedata.category(ch) != "Mn").lower()
-    if "tai" in t:
-        return TAI
-    if "xiu" in t:
-        return XIU
-    return None
-
-
-def parse_history(data):
-    if isinstance(data, list):
-        arr = data
-    elif isinstance(data, dict) and isinstance(data.get("history"), list):
-        arr = data["history"]
-    elif isinstance(data, dict) and "phien" in data:          # API /api/tx: 1 object = 1 phiên mới nhất
-        arr = [data]
-    else:
-        arr = []
-    m = {}
-    for r in arr:
-        if not isinstance(r, dict):
-            continue
-        phien = _parse_int(r.get("phien"))
-        d1 = _parse_int(r.get("xuc_xac_1"))
-        d2 = _parse_int(r.get("xuc_xac_2"))
-        d3 = _parse_int(r.get("xuc_xac_3"))
-        if None in (phien, d1, d2, d3):
-            continue
-        if any(d < 1 or d > 6 for d in (d1, d2, d3)):
-            continue
-        total = d1 + d2 + d3
-        m[phien] = {"phien": phien, "d1": d1, "d2": d2, "d3": d3, "total": total,
-                    "actual": norm_kq(r.get("ket_qua")) or actual_of(total),
-                    "time": r.get("thoi_gian") or ""}
-    return [m[k] for k in sorted(m)]            # cũ -> mới
-
-
-_hist_store = {}            # phien -> record (các phiên đã quét được, tool tự tích lũy vì upstream chỉ trả 1 phiên)
+_hist_store = {}            # phien -> record (các phiên nhận được từ WebSocket Sun.Win, tool tự tích lũy)
 _hist_loaded = False
 
 
@@ -3190,21 +3194,560 @@ def _recent_accuracy(graded, size, with_chuoi=False, cfg=SUN):
     return out
 
 
-# ─── TRẠNG THÁI NỀN + QUÉT UPSTREAM ──────────────────────────────────────
+# ─── NGUỒN SUN.WIN: WEBSOCKET + TỰ ĐĂNG NHẬP / TỰ ĐỔI TOKEN (port từ apitxsun.py) ─────────────────────
+# Chỉ port phần LẤY DỮ LIỆU. Các route HTTP công khai của apitxsun (/api/ditmemaysun, /api/history, /api/auth/renew ...) KHÔNG đem sang:
+# mọi dữ liệu ra ngoài đều đi qua cổng key / HWID / panel duyệt của sunviw (không mở thêm đường nào không cần key).
+_SUN_REDACT_RE = re.compile(
+    r"eyJ[A-Za-z0-9_\-]{6,}\.[A-Za-z0-9_\-]{6,}(?:\.[A-Za-z0-9_\-]+)?"                                                  # JWT (wsToken / accessToken)
+    r"|(?:refresh_?token|access_?token|ws_?token|token|signature|password|authorization)[\"']?\s*[=:]\s*[\"']?[^\s&\"',}]+"   # token=... · "signature":"..."
+    r"|[A-Fa-f0-9]{24,}(?:\.[A-Fa-f0-9]{16,})?"                                                                          # refreshToken / signature dạng hex
+    r"|(?:https?|wss?)://\S+",                                                                                           # URL (có thể kèm token)
+    re.I)
+
+
+def _sun_redact(text):
+    """Xoá mọi thứ giống token / mật khẩu / URL khỏi chuỗi trước khi ghi log hoặc lưu vào trạng thái (last_error, stale...) — không lộ cả khi lỗi thư viện in kèm URL / header."""
+    t = str(text)
+    secrets = [SUNWIN_PASSWORD, SUNWIN_USERNAME, SUNWIN_REFRESH_TOKEN, SUNWIN_SIGNATURE]
+    feed = globals().get("SUN_FEED")
+    ses = getattr(getattr(feed, "auth", None), "session", None)
+    if isinstance(ses, dict):
+        secrets += [ses.get(k) for k in ("accessToken", "refreshToken", "wsToken", "signature")]
+    for sec in sorted({x for x in secrets if isinstance(x, str) and len(x) >= 6}, key=len, reverse=True):
+        t = t.replace(sec, "[da an]")
+    return _SUN_REDACT_RE.sub("[da an]", t)
+
+
+def _sun_log(msg):
+    try:
+        print("[SUN] " + _sun_redact(msg), flush=True)
+    except Exception:  # noqa: BLE001 - stdout lỗi mã hoá không được làm sập luồng nền
+        pass
+
+
+def _sun_ms():
+    return int(time.time() * 1000)
+
+
+def _sun_time_str():
+    """Giờ VN theo đúng dạng thoi_gian của API cũ ('11-10-2026 13:50:38 UTC+7') -> lịch sử đã lưu từ trước vẫn đồng dạng."""
+    return time.strftime("%d-%m-%Y %H:%M:%S", time.gmtime(time.time() + 7 * 3600)) + " UTC+7"
+
+
+def _sun_static_username():
+    try:
+        return json.loads(SUNWIN_INFO).get("username") or "GM_apivopnhaan"
+    except Exception:  # noqa: BLE001
+        return "GM_apivopnhaan"
+
+
+SUN_STATIC_USERNAME = _sun_static_username()
+
+
+class SunAuthNotReady(Exception):
+    """Chưa điền đủ thông tin cho đăng nhập bằng tài khoản / mật khẩu."""
+
+
+def sun_login_with_password(username, password):
+    """
+    >>> CHƯA LÀM ĐƯỢC <<<  (giữ nguyên như apitxsun.py)
+    Web đăng nhập tk/mk qua thư viện OAuth iframe `auth-lib-prod.es.js` (trang login.<domain>/auth/authorize + /auth/token), file đó chưa có trong code đã gửi.
+    Khi có, hàm này cần trả về {"accessToken": ..., "refreshToken": ...}.
+    Trong lúc chờ, tool chạy bằng refreshToken (SUNWIN_REFRESH_TOKEN) và tự đổi liên tục.
+    """
+    raise SunAuthNotReady("dang nhap bang tk/mk chua lam duoc (thieu auth-lib-prod.es.js)")
+
+
+class SunAuth:
+    """Tự đăng nhập + tự thay token Sun.Win: refreshToken -> accessToken -> (info + signature + wsToken). Phiên lưu ở SUNWIN_SESSION_FILE."""
+
+    def __init__(self, feed):
+        self.feed = feed
+        self.enabled = SUNWIN_AUTO_LOGIN
+        self._lock = threading.RLock()     # bảo vệ self.session
+        self._op_lock = threading.Lock()   # chỉ 1 lần login/refresh tại một thời điểm
+        self.force = threading.Event()     # yêu cầu đổi token ngay
+        self.wake = threading.Event()      # đánh thức vòng lặp
+        self.session = None
+        self.last_error = None
+        self.last_renew_ts = None
+        self.last_method = None
+        self.renew_count = 0
+        self._id_url_cache = None
+        self._load()
+
+    # ---- lưu / nạp phiên ---------------------------------------------------
+    def _load(self):
+        try:
+            with open(SUNWIN_SESSION_FILE, encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict) and data.get("signature") and data.get("info") and data.get("wsToken"):
+                self.session = data
+                _sun_log("da nap phien dang nhap da luu")
+        except FileNotFoundError:
+            pass
+        except Exception as e:  # noqa: BLE001
+            _sun_log(f"khong doc duoc file phien: {type(e).__name__}")
+        if not self.session and SUNWIN_REFRESH_TOKEN:
+            # chỉ có refreshToken -> vòng lặp sẽ đổi lấy phiên đầy đủ
+            self.session = {"refreshToken": SUNWIN_REFRESH_TOKEN, "expireIn": 0}
+
+    def _save(self):
+        try:
+            tmp = SUNWIN_SESSION_FILE + ".tmp"
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(self.session, f, ensure_ascii=False)
+            os.replace(tmp, SUNWIN_SESSION_FILE)
+        except Exception as e:  # noqa: BLE001
+            _sun_log(f"khong luu duoc phien: {type(e).__name__}")
+
+    # ---- truy cập an toàn --------------------------------------------------
+    def usable_session(self):
+        """Phiên có đủ info + signature + wsToken để bắt tay WebSocket, hoặc None."""
+        with self._lock:
+            s = self.session
+            if s and s.get("info") and s.get("signature") and s.get("wsToken"):
+                return dict(s)
+            return None
+
+    def seconds_left(self):
+        with self._lock:
+            s = self.session
+            if not s or not s.get("signature"):
+                return -1
+            return s.get("expireIn", 0) / 1000 - time.time()
+
+    # ---- gọi API (giống hệt cách web gọi) ------------------------------------
+    def _get_json(self, url, token="", need_ok=True):
+        headers = {
+            "Origin": SUNWIN_AUTH_ORIGIN,
+            "Referer": SUNWIN_AUTH_ORIGIN + "/",
+            "User-Agent": SUN_WS_UA,
+            "Accept": "application/json",
+        }
+        if token:
+            headers["Authorization"] = token  # web gửi token trần, không có "Bearer"
+        req = urllib.request.Request(url, headers=headers)
+        try:
+            with urllib.request.urlopen(req, timeout=15) as r:
+                body = json.loads(r.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            raise RuntimeError(f"HTTP {e.code}") from None          # không đưa URL (có refreshToken) vào thông báo lỗi
+        except urllib.error.URLError as e:
+            raise RuntimeError(f"khong goi duoc API dang nhap ({getattr(e, 'reason', e)})") from None
+        if not isinstance(body, dict):
+            raise RuntimeError("API dang nhap tra du lieu la")
+        status = body.get("status")
+        if status == 500 or (need_ok and status != 0):
+            msg = str(body.get("message") or (body.get("data") or {}).get("message") or "")[:120]
+            raise RuntimeError(f"server tra status={status} {msg}".strip())
+        return body
+
+    def _id_url(self):
+        """IDdomainURL: lấy từ biến môi trường, hoặc tự tìm như web (distributor -> acs)."""
+        if SUNWIN_AUTH_URL:
+            return SUNWIN_AUTH_URL
+        if self._id_url_cache:
+            return self._id_url_cache
+        host = SUNWIN_HOST_DOMAIN if SUNWIN_HOST_DOMAIN.endswith("/") else SUNWIN_HOST_DOMAIN + "/"
+        dist = self._get_json(
+            f"{host}distributor?command=regdis&bundle={SUNWIN_BUNDLE_ID}&appName={SUNWIN_APP_NAME}",
+            need_ok=False,
+        )
+        d = dist.get("data") or {}
+        dist_id, app_id = d.get("distId"), d.get("applicationId")
+        if not (dist_id and app_id):
+            raise RuntimeError("distributor khong tra distId/applicationId")
+        acs = self._get_json(
+            f"{host}acs?command=get-bid&distId={urllib.parse.quote(str(dist_id), safe='')}"
+            f"&versionId={SUNWIN_CONFIG_VERSION}&platformId={SUNWIN_PLATFORM_ID}"
+            f"&appId={urllib.parse.quote(str(app_id), safe='')}",
+            need_ok=False,
+        )
+        url = (((acs.get("data") or {}).get("config") or {}).get("services") or {}).get("id")
+        if not url:
+            raise RuntimeError("acs khong tra config.services.id")
+        self._id_url_cache = url
+        _sun_log("da tim duoc dia chi API dang nhap")
+        return url
+
+    def _refresh_access(self, refresh_token, old_access=""):
+        """refreshToken -> accessToken mới (web: ?command=refreshToken&refreshToken=...)."""
+        url = f"{self._id_url()}?command=refreshToken&refreshToken={urllib.parse.quote(refresh_token, safe='')}"
+        access = (self._get_json(url, old_access).get("data") or {}).get("accessToken")
+        if not access:
+            raise RuntimeError("refreshToken khong tra accessToken")
+        return access
+
+    def _fetch_session(self, access_token, refresh_token):
+        """accessToken -> info + signature + wsToken (web: /?command=loginAccessToken)."""
+        body = self._get_json(f"{self._id_url()}/?command=loginAccessToken", access_token)
+        data = body.get("data") or {}
+        info, signature = data.get("info"), data.get("signature")
+        ws_token = data.get("wsToken") or (info or {}).get("wsToken")
+        if not (info and signature and ws_token):
+            raise RuntimeError("loginAccessToken thieu info/signature/wsToken")
+        expire = int(data.get("expireIn") or 0) or _sun_ms() + 55 * 60 * 1000
+        return {
+            "accessToken": data.get("accessToken") or access_token,
+            "refreshToken": data.get("refreshToken") or info.get("refreshToken") or refresh_token,
+            "wsToken": ws_token,
+            "signature": signature,
+            "info": info,          # giữ nguyên thứ tự key của server
+            "expireIn": expire,
+            "saved_at": _sun_ms(),
+        }
+
+    def _accept(self, new, method):
+        with self._lock:
+            self.session = new
+            self.last_error = None
+            self.last_renew_ts = time.time()
+            self.last_method = method
+            self.renew_count += 1
+        self._save()
+        mins = max(0, int(self.seconds_left() // 60))
+        _sun_log(f"da lay token moi bang {method}, het han sau ~{mins} phut")
+
+    # ---- đổi token: refreshToken trước, tk/mk sau --------------------------
+    def renew(self):
+        with self._op_lock:
+            errors = []
+            with self._lock:
+                cur = dict(self.session or {})
+            refresh_token = cur.get("refreshToken")
+            if refresh_token:
+                try:
+                    access = self._refresh_access(refresh_token, cur.get("accessToken") or "")
+                    self._accept(self._fetch_session(access, refresh_token), "refreshToken")
+                    return
+                except Exception as e:  # noqa: BLE001
+                    self._id_url_cache = None  # lần sau tìm lại địa chỉ API
+                    errors.append(f"refresh: {e}")
+            else:
+                errors.append("chua co refreshToken (dat SUNWIN_REFRESH_TOKEN)")
+            if SUNWIN_USERNAME and SUNWIN_PASSWORD:
+                try:
+                    tokens = sun_login_with_password(SUNWIN_USERNAME, SUNWIN_PASSWORD)
+                    self._accept(
+                        self._fetch_session(tokens["accessToken"], tokens.get("refreshToken")),
+                        "tai khoan/mat khau",
+                    )
+                    return
+                except SunAuthNotReady as e:
+                    errors.append(str(e))
+                except Exception as e:  # noqa: BLE001
+                    errors.append(f"login: {e}")
+            raise RuntimeError("; ".join(errors))
+
+    def request_renew(self):
+        if not self.enabled:
+            return False
+        self.force.set()
+        self.wake.set()
+        return True
+
+    # ---- vòng lặp nền ------------------------------------------------------
+    def loop(self):
+        backoff = 0
+        while True:
+            wait = 30
+            try:
+                forced = self.force.is_set()
+                left = self.seconds_left()
+                recent = (
+                    self.last_renew_ts is not None
+                    and time.time() - self.last_renew_ts < SUN_MIN_RENEW_GAP
+                )
+                if (forced or left < SUN_REFRESH_MARGIN) and not (recent and not forced):
+                    self.renew()
+                    self.force.clear()
+                    backoff = 0
+                    if SUN_RECONNECT_AFTER_RENEW:
+                        self.feed.reconnect()  # kết nối lại bằng token mới
+                    left = self.seconds_left()
+                wait = max(10, min(left - SUN_REFRESH_MARGIN, 300))
+            except Exception as e:  # noqa: BLE001
+                msg = _sun_redact(e)[:240]
+                if msg != self.last_error:
+                    _sun_log(f"auto-login loi: {msg}")
+                self.last_error = msg
+                backoff = min(max(backoff * 2, 30), 600)
+                wait = backoff
+            self.wake.wait(timeout=wait)
+            self.wake.clear()
+
+    def status(self):
+        left = self.seconds_left()
+        with self._lock:
+            return {
+                "bat": self.enabled,
+                "co_phien": self.usable_session() is not None,
+                "het_han_sau_giay": int(left) if left >= 0 else None,
+                "cach_dang_nhap_cuoi": self.last_method,
+                "doi_token_cuoi": (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(self.last_renew_ts)) if self.last_renew_ts else None),
+                "so_lan_doi_token": self.renew_count,
+                "loi": self.last_error,
+                "che_do_token_url": SUN_WS_TOKEN_MODE,
+            }
+
+
+class SunFeed:
+    """WebSocket Sun.Win -> bộ đệm các phiên mới nhận được. refresh() lấy bộ đệm (drain) rồi gộp vào lịch sử SUN (hist_update).
+    cmd 1008 = phiên mới (sid) · cmd 1003 + gBB = kết quả (d1, d2, d3) của phiên đang giữ."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._start_lock = threading.Lock()
+        self._pending = {}              # phien -> record, chờ refresh() nhét vào lịch sử
+        self.current_sid = None         # phiên mới nhất vừa báo (cmd 1008), chờ kết quả
+        self.last_result_sid = None     # phiên của kết quả gần nhất (chống ghi trùng)
+        self.got_total = 0              # số kết quả nhận được từ lúc server chạy
+        self.last_result_ts = None
+        self.ws_lib = None              # module websocket (nạp lười để thiếu thư viện thì server vẫn chạy)
+        self.ws_app = None
+        self.connected = False
+        self.last_msg_time = 0.0        # lần cuối nhận dữ liệu ván (cmd 1003/1008)
+        self.conn_started = 0.0         # lúc mở kết nối hiện tại
+        self.conn_got_msg = False       # kết nối hiện tại đã nhận dữ liệu ván chưa
+        self.last_error = None
+        self.url_flip = False           # đảo kiểu token trên URL khi kết nối liên tục thất bại
+        self.started = False
+        self.auth = SunAuth(self)
+
+    # ---- khởi động -----------------------------------------------------------
+    def start(self):
+        with self._start_lock:
+            if self.started:
+                return
+            self.started = True
+        if not SUNWIN_ENABLED:
+            _sun_log("nguon SUN dang TAT (SUNWIN_ENABLED=0) -> khong ket noi WebSocket")
+            return
+        try:
+            import websocket  # pip install websocket-client
+        except ImportError:
+            _sun_log("THIEU thu vien websocket-client -> chay: pip install websocket-client roi khoi dong lai server")
+            return
+        self.ws_lib = websocket
+        if self.auth.enabled:
+            _sun_log("auto-login: BAT")
+            threading.Thread(target=self.auth.loop, daemon=True, name="sun-auth").start()
+        else:
+            _sun_log("auto-login: TAT (SUNWIN_AUTO_LOGIN=0) -> dung token co dinh")
+        _sun_log("dang ket noi WebSocket Sun.Win...")
+        threading.Thread(target=self._ws_loop, daemon=True, name="sun-ws").start()
+        threading.Thread(target=self._watchdog_loop, daemon=True, name="sun-watchdog").start()
+
+    # ---- bộ đệm phiên mới ----------------------------------------------------
+    def drain(self):
+        """Lấy (và xoá) các phiên mới nhận được, cũ -> mới."""
+        with self._lock:
+            recs = [self._pending[k] for k in sorted(self._pending)]
+            self._pending.clear()
+        return recs
+
+    def requeue(self, recs):
+        """Trả lại bộ đệm nếu gộp vào lịch sử bị lỗi (không mất phiên)."""
+        with self._lock:
+            for r in recs:
+                self._pending.setdefault(r["phien"], r)
+
+    def problem(self):
+        """None = nguồn đang khoẻ. Ngược lại: câu ngắn mô tả vì sao dữ liệu có thể chưa mới (vào _state['error'] -> cờ stale)."""
+        if not SUNWIN_ENABLED:
+            return "nguon SUN dang tat (SUNWIN_ENABLED=0)"
+        if self.ws_lib is None:
+            return "server thieu thu vien websocket-client (pip install websocket-client)"
+        if not self.connected:
+            return "WebSocket Sun.Win chua ket noi"      # câu chung: chi tiết lỗi (đăng nhập / WS) CHỈ nằm ở /api/admin/health -> nguon_sun, đã xoá token
+        idle = time.time() - max(self.last_msg_time, self.conn_started)
+        if idle > SUN_STALE_AFTER:
+            return f"WebSocket Sun.Win dang mo nhung {int(idle)}s khong co du lieu van"
+        if not self.got_total:
+            return "dang cho ket qua van dau tien tu Sun.Win"
+        return None
+
+    def status(self):
+        with self._lock:
+            cho = len(self._pending)
+        return {
+            "bat": SUNWIN_ENABLED,
+            "thu_vien_ws": self.ws_lib is not None,
+            "ket_noi": bool(self.connected),
+            "phien_dang_cho": self.current_sid,
+            "so_van_nhan": self.got_total,
+            "van_cuoi_cach_day_giay": (int(time.time() - self.last_result_ts) if self.last_result_ts else None),
+            "cho_nap_lich_su": cho,
+            "loi_ws": self.last_error,
+            "dang_nhap": self.auth.status(),
+        }
+
+    # ---- thông tin kết nối ---------------------------------------------------
+    def _use_fresh_url_token(self, has_session):
+        if not has_session:
+            return False
+        if SUN_WS_TOKEN_MODE == "fresh":
+            return True
+        if SUN_WS_TOKEN_MODE == "static":
+            return False
+        return not self.url_flip  # auto: ưu tiên wsToken mới, lỗi liên tục thì đảo
+
+    def _credentials(self):
+        """(url, messages) dùng cho lần kết nối tới: phiên mới nhất, hoặc cấu hình cố định."""
+        session = self.auth.usable_session()
+        if session:
+            info = session["info"]
+            username = info.get("username") or SUN_STATIC_USERNAME
+            info_str = json.dumps(info, separators=(",", ":"), ensure_ascii=False)
+            signature = session["signature"]
+            if self._use_fresh_url_token(True):
+                url = f"{SUN_WS_BASE_URL}?token={session['wsToken']}"
+            else:
+                url = SUN_WS_URL
+        else:
+            username, info_str, signature, url = SUN_STATIC_USERNAME, SUNWIN_INFO, SUNWIN_SIGNATURE, SUN_WS_URL
+        messages = [
+            [1, "MiniGame", username, "WangLin", {"info": info_str, "signature": signature}],
+            [6, "MiniGame", "taixiuPlugin", {"cmd": 1005}],
+            [6, "MiniGame", "lobbyPlugin", {"cmd": 10001}],
+        ]
+        return url, messages
+
+    def reconnect(self):
+        """Đóng kết nối hiện tại; _ws_loop sẽ tự mở lại bằng thông tin mới nhất."""
+        app_ = self.ws_app
+        if app_ is not None:
+            try:
+                app_.close()
+            except Exception:  # noqa: BLE001
+                pass
+
+    # ---- callback WebSocket --------------------------------------------------
+    def _on_open(self, ws, messages):
+        self.connected = True
+        self.conn_started = time.time()
+        _sun_log("WebSocket da ket noi toi Sun.Win")
+
+        def send_initial():
+            for i, msg in enumerate(messages):
+                if i:
+                    time.sleep(SUN_SEND_GAP)
+                try:
+                    if ws.sock and ws.sock.connected:
+                        ws.send(json.dumps(msg, separators=(",", ":"), ensure_ascii=False))
+                except Exception as e:  # noqa: BLE001
+                    _sun_log(f"loi gui message khoi tao: {type(e).__name__}")
+                    return
+
+        threading.Thread(target=send_initial, daemon=True, name="sun-init").start()
+
+    def _on_message(self, ws, message):
+        try:
+            data = json.loads(message)
+            if not isinstance(data, list) or len(data) < 2 or not isinstance(data[1], dict):
+                return
+            payload = data[1]
+            cmd, sid = payload.get("cmd"), payload.get("sid")
+            d1, d2, d3, gbb = payload.get("d1"), payload.get("d2"), payload.get("d3"), payload.get("gBB")
+
+            if cmd in (1003, 1008):          # có dữ liệu ván -> kết nối đang sống tốt
+                self.last_msg_time = time.time()
+                self.conn_got_msg = True
+
+            if cmd == 1008 and sid:          # phiên mới
+                with self._lock:
+                    self.current_sid = sid
+                _sun_log(f"phien moi: {sid}")
+
+            if cmd == 1003 and gbb:          # kết quả phiên
+                if not d1 or not d2 or not d3:
+                    return
+                with self._lock:
+                    session = self.current_sid or sid
+                    if not session:
+                        return               # kết quả "phát lại" lúc mới nối, chưa biết phiên -> bỏ qua
+                    if session == self.last_result_sid:
+                        return               # kết quả trùng của cùng một phiên
+                    rec = _hit_rec(session, d1, d2, d3)       # kiểm tra xúc xắc 1..6 + chấm Tài/Xỉu (tổng >= 11 = Tài)
+                    if rec is None:
+                        return
+                    rec["time"] = _sun_time_str()
+                    self.last_result_sid = session
+                    self._pending[rec["phien"]] = rec
+                    self.current_sid = None
+                    self.got_total += 1
+                    self.last_result_ts = time.time()
+                _sun_log(f"phien {rec['phien']}: {rec['d1']}-{rec['d2']}-{rec['d3']} = {rec['total']} ({rec['actual']})")
+        except Exception as e:  # noqa: BLE001
+            _sun_log(f"loi xu ly message: {type(e).__name__}: {e}")
+
+    def _on_error(self, ws, error):
+        self.last_error = _sun_redact(f"{type(error).__name__}: {str(error)[:300]}")[:160]
+        _sun_log(f"WebSocket error: {self.last_error}")
+
+    def _on_close(self, ws, code=None, reason=None):
+        self.connected = False
+        _sun_log(f"WebSocket da dong. code={code} reason={str(reason)[:80]}")
+
+    # ---- vòng lặp nền --------------------------------------------------------
+    def _ws_loop(self):
+        """Tự kết nối lại; mỗi lần kết nối đều lấy token mới nhất. Lỗi liên tục thì tự đảo kiểu token trên URL (mỗi 2 lần) và ép đăng nhập lại (mỗi 3 lần)."""
+        fail_streak = 0
+        while True:
+            self.conn_got_msg = False
+            try:
+                url, messages = self._credentials()
+                self.ws_app = self.ws_lib.WebSocketApp(
+                    url,
+                    header=[f"User-Agent: {SUN_WS_UA}"],
+                    on_open=lambda w, m=messages: self._on_open(w, m),
+                    on_message=self._on_message,
+                    on_error=self._on_error,
+                    on_close=self._on_close,
+                )
+                self.ws_app.run_forever(
+                    origin=SUN_WS_ORIGIN,
+                    ping_interval=SUN_PING_INTERVAL,
+                    ping_timeout=SUN_PING_TIMEOUT,
+                )
+            except Exception as e:  # noqa: BLE001
+                self.last_error = _sun_redact(f"{type(e).__name__}: {str(e)[:300]}")[:160]
+                _sun_log(f"WebSocket crash: {self.last_error}")
+            self.connected = False
+
+            if self.conn_got_msg:                    # kết nối này có nhận dữ liệu ván
+                fail_streak = 0
+            else:
+                fail_streak += 1
+                if self.auth.enabled and fail_streak >= 2:
+                    if fail_streak % 2 == 0 and self.auth.usable_session() and SUN_WS_TOKEN_MODE == "auto":
+                        self.url_flip = not self.url_flip
+                        _sun_log("dao kieu token tren URL websocket")
+                    if fail_streak % 3 == 0:
+                        _sun_log("ket noi loi lien tuc -> ep dang nhap lai")
+                        self.auth.request_renew()
+            time.sleep(min(SUN_RECONNECT_DELAY * (1 + fail_streak), 30))
+
+    def _watchdog_loop(self):
+        """Kết nối còn mở nhưng lâu không có dữ liệu ván (token chết âm thầm) -> reconnect."""
+        while True:
+            time.sleep(10)
+            if self.connected and time.time() - max(self.last_msg_time, self.conn_started) > SUN_STALE_AFTER:
+                _sun_log(f"{SUN_STALE_AFTER}s khong co du lieu -> ket noi lai")
+                self.conn_got_msg = False            # tính là kết nối lỗi để _ws_loop leo thang
+                self.reconnect()
+
+
+SUN_FEED = SunFeed()
+
+
+# ─── TRẠNG THÁI NỀN + NHẬN DỮ LIỆU SUN (WEBSOCKET) ──────────────────────
 _state = {"result": None, "latest": None, "error": None, "updated": None, "checked": None, "polls": 0}
 _state_lock = threading.Lock()
 _refresh_lock = threading.Lock()
 _poller_started = False
-
-
-def _fetch_json(url):
-    req = urllib.request.Request(url, headers={
-        "User-Agent": "Mozilla/5.0 (compatible; SUNVIW-API/1.0)",
-        "Accept": "application/json",
-        "Cache-Control": "no-cache",
-    })
-    with urllib.request.urlopen(req, timeout=UPSTREAM_TIMEOUT) as r:
-        return json.loads(r.read().decode("utf-8"))
 
 
 def _now():
@@ -3212,30 +3755,35 @@ def _now():
 
 
 def refresh():
-    """Lấy upstream; chỉ tính lại khi có phiên mới. Ném exception nếu lỗi (poller sẽ ghi lại)."""
+    """Lấy các phiên mới Sun.Win vừa nhận qua WebSocket (SUN_FEED) -> gộp vào lịch sử; chỉ tính lại khi có phiên mới. Ném exception nếu chưa có dữ liệu nào (poller sẽ ghi lại)."""
     with _refresh_lock:
-        recs = parse_history(_fetch_json(UPSTREAM_URL))
-        if not recs:
-            raise ValueError("upstream khong co phien hop le (can phien + xuc_xac_1..3)")
-        hist = hist_update(recs)                      # upstream chỉ trả 1 phiên mới nhất -> gộp vào lịch sử tích lũy
+        recs = SUN_FEED.drain()
+        try:
+            hist = hist_update(recs)                  # gộp phiên mới vào lịch sử tích lũy (nạp file lần đầu)
+        except Exception:  # noqa: BLE001 - không làm mất phiên đã nhận
+            SUN_FEED.requeue(recs)
+            raise
+        if not hist:
+            raise ValueError(SUN_FEED.problem() or "chua nhan duoc phien nao tu WebSocket Sun.Win (dang cho ket noi / dang nhap)")
         latest = hist[-1]["phien"]
+        feed_err = SUN_FEED.problem()                 # None = nguồn khoẻ; còn lại = cờ stale (WS mất kết nối / im lặng / thiếu thư viện)
         with _state_lock:
             same = _state["result"] is not None and _state["latest"] == latest
         if same:
             with _state_lock:
-                _state["error"] = None
+                _state["error"] = feed_err
                 _state["checked"] = _now()
             return
         res = build_result(hist)
         with _state_lock:
-            _state.update(result=res, latest=latest, error=None, updated=_now(), checked=_now())
+            _state.update(result=res, latest=latest, error=feed_err, updated=_now(), checked=_now())
 
 
 def _poll_loop():
     while True:
         try:
             refresh()
-        except Exception as e:  # noqa: BLE001 - giữ poller sống dù upstream lỗi
+        except Exception as e:  # noqa: BLE001 - giữ poller sống dù nguồn SUN lỗi
             with _state_lock:
                 _state["error"] = f"{type(e).__name__}: {e}"
                 _state["checked"] = _now()
@@ -3249,6 +3797,7 @@ def ensure_poller():
     if _poller_started:
         return
     _poller_started = True
+    SUN_FEED.start()                              # SUN: nối WebSocket Sun.Win + tự đăng nhập / đổi token (nguồn dữ liệu, thay API ngoài)
     threading.Thread(target=_poll_loop, daemon=True, name="sunviw-poller").start()
     hit_ensure_pollers()                          # HITCLUB: bật poller 2 bàn (TX thường + TX MD5)
     _ab_boot = globals().get("ab_boot")           # AUTO CƯỢC LC79: nạp phiên đã lưu (khối định nghĩa ở gần cuối file)
@@ -3682,7 +4231,7 @@ def hist_unhide(game):
 
 
 def sun_wipe():
-    """XÓA SẠCH data của SUN: lịch sử xúc xắc + các ván đã chấm + kết quả đang giữ. Tool tự quét lại từ upstream và tích lũy lại từ đầu."""
+    """XÓA SẠCH data của SUN: lịch sử xúc xắc + các ván đã chấm + kết quả đang giữ. Tool nhận lại phiên mới từ WebSocket Sun.Win và tích lũy lại từ đầu."""
     global _hist_loaded
     with _refresh_lock:
         n = len(_hist_store)
@@ -8533,14 +9082,14 @@ def _scrub_pub(o):
 
 @app.route("/api/admin/health")
 def health():
-    """Health ĐẦY ĐỦ (bộ logic, ngưỡng AF, config bàn, upstream, file) — CHỈ admin chính."""
+    """Health ĐẦY ĐỦ (bộ logic, ngưỡng AF, config bàn, nguồn SUN WebSocket, file) — CHỈ admin chính."""
     _s, _e = _need_main()
     if _e:
         return _e
     ensure_poller()
     with _state_lock:
         s = {k: _state[k] for k in ("latest", "error", "updated", "checked", "polls")}
-    s.update(ok=s["error"] is None and s["latest"] is not None, upstream=UPSTREAM_URL,
+    s.update(ok=s["error"] is None and s["latest"] is not None, nguon_sun=SUN_FEED.status(),
              poll_sec=POLL_SEC, wr_window=WR_WINDOW, be_final=FLIP_FINAL,
              wr_weights=wr_weights_full(), wr_flip=WR_FLIP_WEIGHT, wr_decay=WR_DECAY, wr_floor=WR_FLOOR, wr_newest=WR_WEIGHT_NEWEST,       # trọng số cũ nhất -> mới nhất
              hist_keep=HIST_KEEP, data_win=DATA_WIN, persist_keep=PERSIST_KEEP, bo_logic=SUN_NAMES,
@@ -11540,6 +12089,10 @@ def _sec_report():
         w.append("SUNVIW_MAIN_PASS qua ngan (< 16 ky tu)")
     if AB_SAVE_PW and not _ab_fernet():
         w.append("AUTOBET_SAVE_PW=1 nhung thieu SUNVIW_SECRET (>= 24 ky tu) hoac thu vien cryptography -> mat khau LC79 se KHONG duoc luu xuong dia")
+    if SUNWIN_ENABLED:
+        _miss = [k for k in ("SUNWIN_WS_URL", "SUNWIN_INFO", "SUNWIN_SIGNATURE", "SUNWIN_USERNAME", "SUNWIN_PASSWORD", "SUNWIN_REFRESH_TOKEN") if not os.environ.get(k)]
+        if _miss:
+            w.append("Sun.Win: chua dat " + " / ".join(_miss) + " -> token / tai khoan Sun.Win dang nam trong code (nen chuyen sang Railway Variables)")
     if not (os.environ.get("LC_MD5_API_URL") or os.environ.get("TELE68_API_URL")) or not os.environ.get("LC_HU_API_URL"):
         w.append("LC_MD5_API_URL / LC_HU_API_URL chua dat -> URL (kem token at=) dang nam trong code")
     if not os.environ.get("BV_MD5_API_URL") or not os.environ.get("BV_HU_API_URL"):
@@ -11608,7 +12161,7 @@ if __name__ != "__main__":
 
 
 def main():
-    global UPSTREAM_URL, POLL_SEC, FLIP_FINAL, WR_FLIP_WEIGHT, HIT_ENABLED
+    global POLL_SEC, FLIP_FINAL, WR_FLIP_WEIGHT, HIT_ENABLED
     global AF_ENABLED, AF_FLIP_LOW, AF_FLIP_HIGH, AF_MIN_GAMES, AF_MODE_WINDOW, AF_MODE_BELOW, AF_FLIP_FINAL, AF_FLIP_FINAL_CT, AF_FLIP_FINAL_CAO, AF_FLIP_FINAL_THAP, AF_FLIP_FINAL_ALL, AF_MODE_FLIP
     global AF_FLIP_BAND, AF_FLIP_LOW_MIN, AF_FLIP_LOW_MAX, AF_FLIP_HIGH_MIN, AF_FLIP_HIGH_MAX
     global AF_GROUP_FLIPPED_ONLY, AF_GROUP_NEED_MAJORITY, AF_SWITCH, AF_SWITCH_NEED, AF_SWITCH_LEAD, AF_SWITCH_PRIO
@@ -11619,8 +12172,8 @@ def main():
     ap = argparse.ArgumentParser(description="SUNVIW - API JSON (SUN + HITCLUB: 13 logic chuoi/xuc xac/tong/so phien · key theo game)")
     ap.add_argument("--host", default="0.0.0.0")
     ap.add_argument("--port", type=int, default=int(os.environ.get("PORT", 5000)))
-    ap.add_argument("--upstream", default=UPSTREAM_URL, help="URL API phien moi nhat (…/api/tx)")
-    ap.add_argument("--poll", type=float, default=POLL_SEC, help="chu ky quet upstream (giay)")
+    ap.add_argument("--upstream", default=None, help=argparse.SUPPRESS)      # cờ CŨ: SUN không còn gọi API ngoài -> chỉ nhận để lệnh khởi động cũ không báo lỗi, bỏ qua giá trị
+    ap.add_argument("--poll", type=float, default=POLL_SEC, help="chu ky lay phien moi tu bo dem WebSocket Sun.Win (giay)")
     ap.add_argument("--no-hit", action="store_true", help="TAT ca 2 ban HITCLUB (tx thuong + tx md5)")
     g = ap.add_mutually_exclusive_group()
     g.add_argument("--flip", action="store_true", help="BẬT bẻ final (đảo TÀI<->XỈU)")
@@ -11678,7 +12231,9 @@ def main():
     afa.add_argument("--af-flip-all", action="store_true", help="CHỈ bẻ final của AF khi chế độ ALL (CAO/THẤP giữ nguyên)")
     afa.add_argument("--af-no-flip-all", action="store_true", help="TẮT bẻ final riêng cho chế độ ALL")
     a = ap.parse_args()
-    UPSTREAM_URL, POLL_SEC = a.upstream, a.poll
+    POLL_SEC = a.poll
+    if a.upstream:
+        print("[SUN] --upstream da bo (SUN lay du lieu truc tiep tu WebSocket Sun.Win) -> bo qua", file=sys.stderr)
     if a.no_hit:
         HIT_ENABLED = False
     if a.af:
@@ -11772,7 +12327,8 @@ def main():
         print("!" * 100)
     print(f"KEY HAN     ->  {'tinh tu LAN DUNG DAU TIEN (kich hoat)' if KEY_START_ON_ACTIVATE else 'tinh tu luc TAO key (kieu cu)'} · key cu tao truoc do giu nguyen han")
     print(f"SUNVIW API  ->  http://{a.host}:{a.port}/api/predict")
-    print(f"upstream    ->  {UPSTREAM_URL}")
+    _sf = SUN_FEED.status()
+    print(f"SUN nguon   ->  WebSocket Sun.Win truc tiep (khong qua API ngoai) · {'BAT' if SUNWIN_ENABLED else 'TAT'} · thu vien websocket-client {'CO' if _sf['thu_vien_ws'] else ('THIEU (pip install websocket-client)' if SUNWIN_ENABLED else '-')} · auto-login {'BAT' if SUNWIN_AUTO_LOGIN else 'TAT'} · file phien {SUNWIN_SESSION_FILE}")
     print(f"be final SUN ->  {'BAT' if FLIP_FINAL else 'TAT'}  (chi ap cho van quay ve cach cu; van do AF chot khong bi be)")
     print(f"IP          ->  theo doi {'BAT' if IP_TRACK_ENABLED else 'TAT'} · dang dung = co request trong {IP_ACTIVE_SEC}s · tin proxy {'BAT' if IP_TRUST_PROXY else 'TAT'} · admin key {'CO' if IP_ADMIN_KEY else 'KHONG (ai mo panel cung thay danh sach IP)'} · file {IP_PATH}")
     _be_logic = (f"chi be khi WR trong {AF_FLIP_LOW_MIN:g}-{AF_FLIP_LOW_MAX:g}% hoac {AF_FLIP_HIGH_MIN:g}-{AF_FLIP_HIGH_MAX:g}% (ngoai vung khong be)" if AF_FLIP_BAND
