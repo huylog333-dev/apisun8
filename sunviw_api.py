@@ -460,7 +460,7 @@ def _norm_data_win(v):
 
 DATA_WIN_SEM = 2   # phiên bản cách tính DATA_WIN (1 = cũ: DATA_WIN chỉ là trần, logic nhỏ hơn giữ cửa sổ riêng · 2 = mới: DATA_WIN > 0 thì MỌI logic đọc đúng DATA_WIN ván). Ván lưu theo cách cũ (không có dwv) sẽ được chạy lại logic khi bấm "Tính lại theo config"
 
-DATA_WIN = _norm_data_win(_env_num("SUNVIW_DATA_WIN", 600, int))   # ◄◄ SUN: số ván gần nhất dùng làm data (0 = không giới hạn · vd. 300) — cfg.DATA_WIN của SUN đọc biến này
+DATA_WIN = _norm_data_win(_env_num("SUNVIW_DATA_WIN", 300, int))   # ◄◄ SUN: số ván gần nhất dùng làm data (0 = không giới hạn · vd. 300) — cfg.DATA_WIN của SUN đọc biến này
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  ⚙  CONFIG WR CÓ TRỌNG SỐ (KIỂU "PHẢN ỨNG NHANH + SÀN NHỚ CẦU CŨ")  —  CHỈNH Ở ĐÂY
@@ -764,7 +764,7 @@ LC_MD5_CFG = TableCfg("lcmd5", _hit_env("LCMD5_", _hit_env("TELE68TXMD5_", {
     # AF: bước 3 bẻ theo WR chế độ (WR chế độ < AF_MODE_BELOW % -> đảo final TÀI<->XỈU)
     "AF_MODE_FLIP": False, "AF_MODE_WINDOW": 9, "AF_MODE_MIN": 7, "AF_MODE_BELOW": 45,
     # AF: bẻ final riêng
-    "AF_FLIP_FINAL": False, "AF_FLIP_FINAL_CT": False, "AF_FLIP_FINAL_CAO": False, "AF_FLIP_FINAL_THAP": True, "AF_FLIP_FINAL_ALL": False,   # bộ backtest 300 ván (ALL cao nhất + ALL nhiều ván nhất): KHÔNG bẻ final chế độ nào
+    "AF_FLIP_FINAL": False, "AF_FLIP_FINAL_CT": False, "AF_FLIP_FINAL_CAO": False, "AF_FLIP_FINAL_THAP": False, "AF_FLIP_FINAL_ALL": True,   # bộ backtest 300 ván (ALL cao nhất + ALL nhiều ván nhất): KHÔNG bẻ final chế độ nào
     # đánh giá đúng/sai + số ván lưu
     "EVAL_WINDOW": 500, "PERSIST_KEEP": 300,
 })))
