@@ -751,7 +751,7 @@ LC_MD5_CFG = TableCfg("lcmd5", _hit_env("LCMD5_", _hit_env("TELE68TXMD5_", {
     "TIE_LOGIC": "AFM",
     "CONSEC_CHECK": True,
     # WR có trọng số
-    "WR_WINDOW": 20, "WR_DECAY": 0.95, "WR_FLOOR": 1.0, "WR_WEIGHT_NEWEST": 1.0, "WR_FLIP_WEIGHT": False, "WR_MIN_GAMES": 1,
+    "WR_WINDOW": 15, "WR_DECAY": 0.95, "WR_FLOOR": 1.0, "WR_WEIGHT_NEWEST": 1.0, "WR_FLIP_WEIGHT": False, "WR_MIN_GAMES": 1,
     # bẻ final (dùng khi AF tắt)
     "FLIP_FINAL": False,
     # AF: bước 1 bẻ logic
