@@ -935,7 +935,7 @@ MX_HU_CFG = TableCfg("max789hu", _hit_env("MXHU_", {
     "GID": "mx_hu",
     "POLL_SEC": 3.0,
     "HIST_KEEP": HIST_KEEP,
-    "DATA_WIN": 150,   # ◄◄ số ván gần nhất dùng làm data của RIÊNG bàn này (0 = không giới hạn · vd. 300 · tối thiểu 40) — đổi xong bấm "Tính lại theo config" ở panel
+    "DATA_WIN": 2000,   # ◄◄ số ván gần nhất dùng làm data của RIÊNG bàn này (0 = không giới hạn · vd. 300 · tối thiểu 40) — đổi xong bấm "Tính lại theo config" ở panel
     "TIE_LOGIC": "AFM",
     "CONSEC_CHECK": True,
     # WR có trọng số
